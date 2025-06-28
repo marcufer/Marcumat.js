@@ -3,32 +3,31 @@
   --ripple-default-duration: 490ms;
   --ripple-fade-duration: 1200ms;
 }
-.ripple-surface {
+/* Extra specificity for cross-site robustness */
+body .ripple-surface, .ripple-surface {
   position: relative;
-  overflow: hidden;
+  overflow: hidden !important;
   z-index: 0;
 }
-.ripple {
+body .ripple, .ripple {
   pointer-events: none;
   position: absolute;
-  border-radius: 50%;
+  border-radius: 50% !important;
   width: 18px;
   height: 18px;
   opacity: 1;
   will-change: transform, opacity, filter;
   filter: var(--ripple-blur, blur(0.8px));
   transition:
-    transform var(--ripple-duration, var(--ripple-default-duration, 490ms)) cubic-bezier(0.25, 0.1, 0.25, 1),
+    transform var(--ripple-duration, var(--ripple-default-duration, 490ms)) cubic-bezier(0.32, 0, 0.53, 1),
     opacity var(--ripple-fade-duration, 1200ms) cubic-bezier(0.4,0,0.2,1),
     filter 70ms cubic-bezier(0.4,0,0.2,1);
-  /* Center and near center is always a tight dot (18px), only faint halo expands */
   background: radial-gradient(circle, rgba(33,150,243,0.10) 74%, rgba(33,150,243,0.008) 100%);
-  /* The stops: 62% = core, 74% = halo start, 100% = edge (barely visible) */
 }
 .ripple.dynamic-halo-pro {
   /* Only the faint halo expands, core/near does not visually scale */
 }
 .ripple.animating {}
-.ripple.fading {
+body .ripple.fading, .ripple.fading {
   opacity: 0;
 }
