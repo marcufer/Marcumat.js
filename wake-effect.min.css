@@ -14,7 +14,6 @@
   border-radius: 50%;
   width: 18px;
   height: 18px;
-  transform: scale(1);
   opacity: 1;
   will-change: transform, opacity, filter;
   filter: var(--ripple-blur, blur(0.8px));
@@ -23,7 +22,7 @@
     opacity var(--ripple-fade-duration, 1200ms) cubic-bezier(0.4,0,0.2,1),
     filter 70ms cubic-bezier(0.4,0,0.2,1);
   /* Center and near center is always a tight dot (18px), only faint halo expands */
-  background: radial-gradient(circle, rgba(33,150,243,0.20) 62%, rgba(33,150,243,0.10) 74%, rgba(33,150,243,0.008) 100%);
+  background: radial-gradient(circle, rgba(33,150,243,0.10) 74%, rgba(33,150,243,0.008) 100%);
   /* The stops: 62% = core, 74% = halo start, 100% = edge (barely visible) */
 }
 .ripple.dynamic-halo-pro {
