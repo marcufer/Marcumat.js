@@ -1,7 +1,7 @@
 :root {
   --ripple-default-color: rgba(33,150,243,0.20);
-  --ripple-default-duration: 490ms;
-  --ripple-fade-duration: 1000ms;
+  --ripple-default-duration: 470ms;
+  --ripple-fade-duration: 1100ms;
 }
 .ripple-surface {
   position: relative;
