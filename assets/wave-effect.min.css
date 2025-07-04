@@ -1,5 +1,5 @@
 :root {
-  --ripple-default-color: rgba(33,150,243,0.20);
+  --ripple-default-color: rgba(24, 68, 102, 0.1);
   --ripple-default-duration: 490ms;
   --ripple-fade-duration: 1200ms;
 }
