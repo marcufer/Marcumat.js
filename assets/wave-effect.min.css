@@ -1,19 +1,31 @@
-.ripple-surface {
-  position: relative;
-  overflow: hidden;
-  z-index: 0;
-  will-change: transform;
+/* --- ส่วนของ Element ที่จะใส่เอฟเฟกต์ (ตัวหลักที่แก้ไข) --- */
+[wave] {
+  /* เปลี่ยน display เพื่อให้รองรับ position และ overflow */
+  display: inline-block;
+
+  /* ทำให้ .ripple ยึดตำแหน่งกับ element นี้ */
+  position: relative; 
+  
+  /* ซ่อนเอฟเฟกต์ส่วนที่เกินขอบเขต */
+  overflow: hidden; 
+
+  /* 💡 แก้ปัญหา layout ขยับ โดยจัดตำแหน่งให้อยู่กึ่งกลางแนวตั้ง */
+  vertical-align: middle;
+  
+  /* (แนะนำ) ลบสีไฮไลท์ตอนกดบนมือถือ */
+  -webkit-tap-highlight-color: transparent;
 }
 
+/* --- ส่วนของเอฟเฟกต์ Ripple (ไม่ต้องแก้ไข) --- */
 .ripple {
   pointer-events: none;
   position: absolute;
   border-radius: 50%;
   width: 18px;
   height: 18px;
-  /* ปรับ blur ให้ต่ำลงเพื่อลด GPU */
-  filter: var(--ripple-blur, blur(0.6px)); /* เดิม 0.8px */
-  opacity: 1;
+  background-color: currentColor; /* ทำให้สีของคลื่นเป็นสีเดียวกับตัวอักษร */
+  filter: var(--ripple-blur, blur(0.6px));
+  opacity: 0.2; /* ปรับลด opacity เริ่มต้นเพื่อความสวยงาม */
   transform: scale(1) translate3d(0,0,0);
   will-change: transform, opacity, filter;
   transition:
@@ -23,10 +35,10 @@
   contain: strict;
 }
 
-/* เพิ่ม class สำหรับแอนิเมชั่น */
 .ripple.animating {
   transform: scale(var(--ripple-final-scale, 1)) translate3d(0,0,0);
 }
+
 .ripple.fading {
   opacity: 0;
 }
