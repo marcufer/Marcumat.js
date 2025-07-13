@@ -97,6 +97,19 @@ If you set `"disableTapHighlight": true`, Marcumat.js injects CSS to make this o
 
 ---
 
+## ⚙️ Advanced Configuration (Coming Soon)
+
+Marcumat.js is being actively developed to support more powerful configuration options for your entire site.  
+In future versions, you will be able to:
+
+- Use **global settings via `wave-setting.json`** (e.g. disableTapHighlight, custom ripple logic)
+- Load themes and customize appearance flexibly using **`wave-setting.css`**
+- Apply settings automatically across all pages and directories
+
+Stay tuned for these features in upcoming releases!
+
+---
+
 ## 💡 How Marcumat.js Works
 
 1. **Automatic Element Enhancement:**  
