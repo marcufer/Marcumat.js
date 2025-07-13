@@ -81,9 +81,19 @@ Just add a `<script type="application/json" id="wave-setting-json">` block in yo
 }
 </script>
 ```
-- Example option: `disableTapHighlight` disables the tap highlight on mobile for a cleaner UI.
 
-> You can add other options in this JSON as supported by Marcumat.js.
+#### 🔹 What is `disableTapHighlight`?
+
+The `disableTapHighlight` option removes the default tap highlight color on mobile browsers (especially on Android and iOS).  
+Normally, when you tap on an element, the browser shows a colored overlay (tap highlight) for feedback.  
+If you set `"disableTapHighlight": true`, Marcumat.js injects CSS to make this overlay fully transparent, so the only feedback users see is the ripple effect itself.
+
+**Benefits:**  
+- Looks cleaner and more modern on touch devices  
+- Prevents browser highlight from interfering with your ripple animation  
+- Recommended for best visual experience
+
+**Without this option:** Users may see both the native tap highlight and the ripple effect at the same time.
 
 ---
 
