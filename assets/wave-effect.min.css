@@ -22,7 +22,7 @@
   height: 18px;
   background-color: currentColor; /* ทำให้สีของคลื่นเป็นสีเดียวกับตัวอักษร */
   filter: var(--ripple-blur, blur(0.6px));
-  opacity: 0.2; /* ปรับลด opacity เริ่มต้นเพื่อความสวยงาม */
+  opacity: 1; /* ปรับลด opacity เริ่มต้นเพื่อความสวยงาม */
   transform: scale(1) translate3d(0,0,0);
   will-change: transform, opacity, filter;
   transition:
