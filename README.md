@@ -3,7 +3,8 @@
 
 ---
 
-Marcumat.js brings beautiful, interactive ripple (wave) effects to any clickable web element—buttons, cards, menus, and more. It’s designed for high performance and minimal resource usage, and is extremely easy to set up and use.
+Marcumat.js adds beautiful, interactive ripple (wave) effects to your web elements—buttons, cards, menus, and more.  
+It’s fast, lightweight, and designed to be simple to use and configure.
 
 ---
 
@@ -16,20 +17,20 @@ Add this script to your HTML file (in `<head>` or before `</body>`):
 ```html
 <script src="https://marcufer.github.io/Marcumat.js/wave-effect.min.js" type="text/javascript" charset="utf-8"></script>
 ```
-
 Marcumat.js will automatically load its required CSS for you.
 
 ---
 
 ## 🖱️ Enable Ripple Effect
 
-Simply add the `wave` attribute to any element you want to have the ripple effect:
+Just add the `wave` attribute to any element you want to have the ripple effect:
 
 ```html
 <button wave>Click Me</button>
 <div wave class="card">Card Content</div>
 ```
-- Works with buttons, divs, links, custom components—almost anything!
+
+Works with buttons, divs, links, custom components—almost anything!
 
 ---
 
@@ -45,11 +46,52 @@ You can easily control the ripple color and behavior for each element:
 
 ---
 
+## 🟩 Setting Default Color & Options for the Whole Page
+
+Marcumat.js allows you to set default colors and global options for ALL ripple effects on a specific page, without needing any special files.  
+You can do this by adding CSS variables or JSON settings directly in the page.
+
+### **A. Default Ripple Color with CSS Variables**
+
+Add a style block in your HTML to define the default ripple color for the entire page:
+
+```html
+<style>
+  :root {
+    --ripple-default-color: #4caf50; /* green ripple by default */
+    /* You can also tweak the blur effect */
+    --ripple-blur: 0.8px;
+  }
+</style>
+```
+
+> All ripple effects on this page will use your chosen default color (unless you override per element).
+
+---
+
+### **B. Global Page Settings with JSON**
+
+Marcumat.js can also read a JSON configuration for global behavior, defined right in your page.
+Just add a `<script type="application/json" id="wave-setting-json">` block in your HTML:
+
+```html
+<script type="application/json" id="wave-setting-json">
+{
+  "disableTapHighlight": true
+}
+</script>
+```
+- Example option: `disableTapHighlight` disables the tap highlight on mobile for a cleaner UI.
+
+> You can add other options in this JSON as supported by Marcumat.js.
+
+---
+
 ## 💡 How Marcumat.js Works
 
 1. **Automatic Element Enhancement:**  
    - On page load, all elements with `[wave]` are upgraded for ripple effects.
-   - Dynamically added elements with `[wave]` are also detected and enhanced automatically.
+   - Dynamically added elements with `[wave]` are also enhanced automatically.
 
 2. **Passive & Smart Event Handling:**  
    - Ripple appears only on intentional clicks/taps.
@@ -58,13 +100,13 @@ You can easily control the ripple color and behavior for each element:
 3. **Resource Pooling:**  
    - Ripple DOM nodes are recycled for maximum memory efficiency.
 
-4. **No Special Configuration Required:**  
-   - Just add the script and use the `wave` attribute—no extra setup, no special files needed!
-   - Place your script where you want; Marcumat.js will handle everything automatically.
+4. **Default Settings in-Page:**  
+   - You can set page-wide defaults using CSS variables (`:root { --ripple-default-color: ... }`)
+   - You can set page-wide options using a JSON script block (`<script type="application/json" id="wave-setting-json"> ... </script>`)
 
 ---
 
-## 📝 Example
+## 📝 Example (All Together)
 
 ```html
 <!DOCTYPE html>
@@ -72,11 +114,23 @@ You can easily control the ripple color and behavior for each element:
 <head>
   <meta charset="UTF-8">
   <title>Marcumat.js Demo</title>
+  <!-- Install Marcumat.js -->
   <script src="https://marcufer.github.io/Marcumat.js/wave-effect.min.js"></script>
+  <!-- Set default ripple color and blur for this page -->
+  <style>
+    :root {
+      --ripple-default-color: #e91e63;
+      --ripple-blur: 0.7px;
+    }
+  </style>
+  <!-- Set global ripple options for this page -->
+  <script type="application/json" id="wave-setting-json">
+    { "disableTapHighlight": true }
+  </script>
 </head>
 <body>
   <button wave>Default Ripple</button>
-  <button wave="c=#e91e63">Pink Ripple</button>
+  <button wave="c=#2196F3">Blue Ripple</button>
   <div wave style="width:200px;height:100px;background:#eee;">Ripple on Div</div>
 </body>
 </html>
