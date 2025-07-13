@@ -3,6 +3,8 @@
   overflow: hidden;
   z-index: 0;
   will-change: transform;
+  contain: strict;
+  transform: translateZ(0); /* GPU compositing */
 }
 
 .ripple {
@@ -11,21 +13,20 @@
   border-radius: 50%;
   width: 18px;
   height: 18px;
-  /* ปรับ blur ให้ต่ำลงเพื่อลด GPU */
-  filter: var(--ripple-blur, blur(0.6px)); /* เดิม 0.8px */
+  filter: var(--ripple-blur, blur(0.6px));
   opacity: 1;
-  transform: scale(1) translate3d(0,0,0);
+  transform: scale(1) translate3d(0,0,0) translateZ(0); /* GPU compositing */
+  backface-visibility: hidden;
   will-change: transform, opacity, filter;
-  transition:
-    transform var(--ripple-duration, 370ms) cubic-bezier(0.32, 0.05, 0.53, 1),
-    opacity var(--ripple-fade-duration, 990ms) cubic-bezier(0.4, 0, 0.2, 1),
-    filter 60ms cubic-bezier(0.4, 0, 0.2, 1);
   contain: strict;
+  transition:
+    transform var(--ripple-duration, 320ms) cubic-bezier(0.32, 0.05, 0.53, 1),
+    opacity var(--ripple-fade-duration, 720ms) cubic-bezier(0.4, 0, 0.2, 1),
+    filter 60ms cubic-bezier(0.4, 0, 0.2, 1);
 }
 
-/* เพิ่ม class สำหรับแอนิเมชั่น */
 .ripple.animating {
-  transform: scale(var(--ripple-final-scale, 1)) translate3d(0,0,0);
+  transform: scale(var(--ripple-final-scale, 1)) translate3d(0,0,0) translateZ(0);
 }
 .ripple.fading {
   opacity: 0;
