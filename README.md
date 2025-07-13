@@ -3,66 +3,42 @@
 
 ---
 
-Marcumat.js brings beautiful, interactive ripple (wave) effects to your website’s clickable elements—buttons, cards, menus, and more. Designed to be lightweight, fast, and resource-efficient, Marcumat.js is easy to use and highly customizable, with automatic or global settings for your entire site.
+Marcumat.js gives your web elements beautiful, interactive ripple (wave) effects—for buttons, cards, menus, and more. It’s designed for maximum performance, minimal resource usage, and is very easy to set up and customize, both per element and globally across your site.
 
 ---
 
-## 📦 Quick Start
+## 🚀 Quick Start
 
-### 1. **Add Marcumat.js to Your Page**
+### 1. **Install Marcumat.js**
 
-Just insert this `<script>` tag into your HTML (in `<head>` or right before `</body>`):
+Add this script to your HTML file (in `<head>` or before `</body>`):
 
 ```html
 <script src="https://marcufer.github.io/Marcumat.js/wave-effect.min.js" type="text/javascript" charset="utf-8"></script>
 ```
 
-Marcumat.js will automatically load its required CSS for you.
+Marcumat.js will automatically load the required CSS for you.
 
 ---
 
-## 🖱️ Usage: Add Ripple to Any Element
+## 🖱️ Add Ripple Effect to Elements
 
-To enable the ripple effect, simply add the `wave` attribute to any HTML element:
+Simply add the `wave` attribute to any element:
 
 ```html
 <button wave>Click Me</button>
 <div wave class="card">Card Content</div>
 ```
-
-- **You can use `wave` on:**  
-  Buttons, links, divs, custom components—any element!
+- Works with buttons, divs, links, custom UI components—anything!
 
 ---
 
-## 🎨 Customization Per Element
+## 📂 Directory Structure & Correct Path Usage
 
-You can control the ripple color and behavior directly:
+Marcumat.js **looks for special settings files** (`wave-setting.css` and `wave-setting.json`) in the same directory as your HTML file or the script file.
 
-- **Set a custom color:**  
-  ```html
-  <button wave="c=#2196F3">Blue Ripple</button>
-  <button wave data-ripple-color="rgba(255,0,0,0.5)">Red Ripple</button>
-  ```
-- **Other options:**  
-  Explore more attributes in the [API section](#api).
-
----
-
-## ⚙️ Global Website Settings
-
-Marcumat.js supports **site-wide configuration via special files**.  
-These files allow you to set options that affect all ripple effects on your website.
-
-### 📁 How Settings Files Work
-
-When the script loads, it automatically looks for these files in the same directory as your HTML file (or the directory where the script is included):
-
-- `wave-setting.css` — Change global ripple appearance with CSS variables.
-- `wave-setting.json` — Control global behavior (e.g., disable tap highlight, default colors).
-
-**The search path for these files is based on where your HTML/script is located.**  
-If your site structure is like this:
+**Example:**  
+Suppose you build your site in `/home/`:
 
 ```
 /home/index.html
@@ -70,25 +46,122 @@ If your site structure is like this:
 /home/wave-setting.css
 /home/wave-setting.json
 ```
-Marcumat.js will look for settings in `/home/`.
+Marcumat.js will automatically search for settings files at `/home/wave-setting.css` and `/home/wave-setting.json`.
 
-**If you use a different directory (like `/app/`), place the settings files there, and the script will expect:**
+**If you use a different directory (e.g., `/myapp/`), place your settings files there:**
 ```
-/app/wave-setting.css
-/app/wave-setting.json
+/myapp/index.html
+/myapp/wave-effect.min.js
+/myapp/wave-setting.css
+/myapp/wave-setting.json
 ```
-> ⚠️ **If settings files are not placed in the correct directory, global settings may not apply!**
+**It is important to keep the settings files in the same directory as your HTML/script file!**  
+If settings are placed elsewhere (like `/assets/`), you must update your file paths accordingly.
 
-### 📝 Example: Custom Settings
+---
 
-**wave-setting.css**
+## 🔗 How to Connect Your Settings Files
+
+Marcumat.js auto-detects and loads these files:
+
+- **wave-setting.css** — Customizes global ripple appearance using CSS variables.
+- **wave-setting.json** — Controls global behavior (e.g., disables tap highlight, sets default colors).
+
+**You do NOT need to manually import these files**—Marcumat.js loads them if they exist in the correct directory.
+
+### **How to Make Sure Your Files Connect Correctly:**
+
+1. **Place `wave-setting.css` and/or `wave-setting.json` in the same directory as your HTML/script file.**
+2. **Marcumat.js will auto-load them when the page loads.**
+3. **If you move your HTML/script to another directory, move your settings files there too.**
+4. **If you want to use a custom path, change your script location to match your settings file location.**
+
+#### ❗ Example: Custom Directory
+
+If your files are in `/dashboard/`:
+```
+/dashboard/index.html
+/dashboard/wave-effect.min.js
+/dashboard/wave-setting.css
+/dashboard/wave-setting.json
+```
+Marcumat.js will automatically use `/dashboard/wave-setting.css` and `/dashboard/wave-setting.json`.
+
+#### ⚠️ If settings files are not in the correct directory, Marcumat.js **will NOT apply your global settings**!
+
+---
+
+## 🎨 Customization
+
+### Per Element
+- **Custom color:**  
+  ```html
+  <button wave="c=#2196F3">Blue Ripple</button>
+  <button wave data-ripple-color="rgba(255,0,0,0.5)">Red Ripple</button>
+  ```
+
+### Global Settings (Affect All Ripples)
+- **wave-setting.css** — Example:
+  ```css
+  :root {
+    --ripple-default-color: #2196f3;
+    --ripple-blur: 0.7px;
+  }
+  ```
+- **wave-setting.json** — Example:
+  ```json
+  {
+    "disableTapHighlight": true
+  }
+  ```
+
+---
+
+## 🧠 How Marcumat.js Works
+
+1. **Automatic Element Enhancement:**  
+   All elements with `[wave]` are auto-enhanced for ripple effects, including dynamically added elements.
+2. **Passive & Smart Event Handling:**  
+   Ripples appear only on intentional clicks/taps—never during scrolling or accidental gestures.
+3. **Resource Pooling:**  
+   Ripple DOM nodes are recycled for memory efficiency.
+4. **Global Settings Loader:**  
+   On load, Marcumat.js looks for `wave-setting.css` and `wave-setting.json` where your HTML/script is located.
+5. **Directory Awareness:**  
+   If you use a custom directory, always place your settings files there.
+
+---
+
+## 📝 Example (All Together)
+
+Suppose your project is in `/home/`:
+
+```html
+<!-- /home/index.html -->
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>Marcumat.js Demo</title>
+  <script src="/home/wave-effect.min.js"></script>
+</head>
+<body>
+  <button wave>Default Ripple</button>
+  <button wave="c=#e91e63">Pink Ripple</button>
+  <div wave style="width:200px;height:100px;background:#eee;">Ripple on Div</div>
+</body>
+</html>
+```
+
+**/home/wave-setting.css**
 ```css
 :root {
   --ripple-default-color: #4caf50;
   --ripple-blur: 0.8px;
 }
 ```
-**wave-setting.json**
+
+**/home/wave-setting.json**
 ```json
 {
   "disableTapHighlight": true
@@ -97,64 +170,11 @@ Marcumat.js will look for settings in `/home/`.
 
 ---
 
-## 💡 How It Works: Architecture & Principles
+## 🚨 Development Status
 
-Marcumat.js is designed for performance and simplicity:
-
-1. **Automatic Element Upgrade:**  
-   - On page load, all elements with `[wave]` are enhanced for the ripple effect.
-   - New elements added later with `[wave]` are also detected (using IntersectionObserver).
-
-2. **Passive & Efficient Events:**  
-   - Listeners are passive, so scrolling/touching won’t trigger unwanted ripples.
-   - Ripple effects are prevented during rapid scroll or gestures.
-
-3. **Ripple Animation:**  
-   - Ripple appears from the point of interaction, expands, fades, and is removed.
-   - All animations use GPU acceleration and are resource-pooled.
-
-4. **Global Settings Loader:**  
-   - Looks for `wave-setting.css` and `wave-setting.json` relative to the script location.
-   - Applies global CSS variables and JSON options (like tap highlight disabling).
-
-5. **Directory Awareness:**  
-   - If you serve Marcumat.js from `/home/`, settings should be in `/home/`.
-   - If you serve from `/`, settings should be in `/`.
-   - Always make sure paths are correct if you move your files!
-
----
-
-## 🗃️ Directory Structure & File Placement
-
-**Best Practice:**  
-Always place your settings files (`wave-setting.css`, `wave-setting.json`) in the same directory as your HTML or Marcumat.js script.
-
-**Example: If your site is in `/website/`**
-```
-/website/index.html
-/website/wave-effect.min.js
-/website/wave-setting.css
-/website/wave-setting.json
-```
-Marcumat.js will pick up settings automatically.
-
-**If you put settings in another directory, update the paths accordingly or move your files!**
-
----
-
-## 🔧 API Reference
-
-- **wave attribute**: Enables ripple effect on element.
-- **c=COLOR**: Sets ripple color (e.g., `wave="c=#FF0000"`).
-- **data-ripple-color**: Alternate way to specify color.
-- **Global settings**: Use `wave-setting.css` and `wave-setting.json` for site-wide options.
-
----
-
-## 🚨 Stability & Future Plans
-
-Marcumat.js is **actively being developed** and may be less stable than a final release.  
-**NPM package support will come in future versions.**
+Marcumat.js is **still actively being developed**.  
+NPM package support will arrive in a future version.  
+Some features may change and the system may not be fully stable yet.
 
 ---
 
@@ -166,8 +186,8 @@ MIT ([LICENSE](LICENSE))
 
 ## 💬 Feedback & Contributions
 
-- Found a bug or have a suggestion? Open an issue or pull request!
-- All feedback is welcome to help make Marcumat.js even better.
+- Found a bug or want a feature? Open an issue or pull request!
+- Your feedback helps make Marcumat.js better.
 
 ---
 
