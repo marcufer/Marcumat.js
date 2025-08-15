@@ -1,44 +1,26 @@
-/* --- ส่วนของ Element ที่จะใส่เอฟเฟกต์ (ปรับปรุงใหม่) --- */
 [wave] {
-  /* 💡 เพิ่ม: ช่วยให้ขนาดไม่ขยับเมื่อมี padding/border */
   box-sizing: border-box; 
-  
-  /* เปลี่ยน display เพื่อให้รองรับ position และ overflow */
   display: inline-block;
-
-  /* ทำให้ .ripple ยึดตำแหน่งกับ element นี้ */
   position: relative; 
-  
-  /* ซ่อนเอฟเฟกต์ส่วนที่เกินขอบเขต */
   overflow: hidden; 
-
-  /* 💡 แก้ปัญหา layout ขยับ โดยจัดตำแหน่งให้อยู่กึ่งกลางแนวตั้ง */
   vertical-align: middle;
 }
-
-/* --- ส่วนของเอฟเฟกต์ Ripple (ไม่ต้องแก้ไข) --- */
 .ripple {
   pointer-events: none;
   position: absolute;
   border-radius: 50%;
   width: 18px;
   height: 18px;
-  background-color: currentColor; /* ทำให้สีของคลื่นเป็นสีเดียวกับตัวอักษร */
-  filter: var(--ripple-blur, blur(0.6px));
-  opacity: 1; /* ปรับลด opacity เริ่มต้นเพื่อความสวยงาม */
+  background-color: currentColor;
+  filter: var(--ripple-blur, blur(0.4px));
+  opacity: 1;
   transform: scale(1) translate3d(0,0,0);
   will-change: transform, opacity, filter;
   transition:
-    transform var(--ripple-duration, 370ms) cubic-bezier(0.32, 0.05, 0.53, 1),
-    opacity var(--ripple-fade-duration, 990ms) cubic-bezier(0.4, 0, 0.2, 1),
+    transform var(--ripple-duration, 320ms) cubic-bezier(0.32, 0.05, 0.53, 1),
+    opacity var(--ripple-fade-duration, 600ms) cubic-bezier(0.4, 0, 0.2, 1),
     filter 60ms cubic-bezier(0.4, 0, 0.2, 1);
   contain: strict;
 }
-
-.ripple.animating {
-  transform: scale(var(--ripple-final-scale, 1)) translate3d(0,0,0);
-}
-
-.ripple.fading {
-  opacity: 0;
-}
+.ripple.animating { transform: scale(var(--ripple-final-scale, 1)) translate3d(0,0,0); }
+.ripple.fading { opacity: 0; }
