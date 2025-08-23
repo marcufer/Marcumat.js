@@ -1,10 +1,30 @@
 [wave] {
-  box-sizing: border-box; 
+  box-sizing: border-box;
   display: inline-block;
-  position: relative; 
-  overflow: hidden; 
+  position: relative;
+  overflow: hidden;
   vertical-align: middle;
 }
+
+/* Slower, more deliberate ripple expansion
+   - JS writes --ripple-duration per ripple (scaled by INTERNAL_SPEED_MULTIPLIER).
+   - CSS multiplier below gives an additional global tuning knob.
+   - All class names and CSS variable names remain identical so JS integration is unchanged.
+   - will-change is applied only during active phases to minimize GPU cost.
+*/
+
+:root{
+  /* Base fallback; JS will usually write per-ripple --ripple-duration */
+  --ripple-duration: 380ms;
+  /* Set >1 to make overall expansion slower. Default here is 1.25 for a noticeably slower feel. */
+  --ripple-duration-multiplier: 1.25;
+  --ripple-fade-duration: 700ms;
+  --ripple-fade-multiplier: 1.0;
+  /* gentle ease: start smooth, end elegant */
+  --ripple-easing: cubic-bezier(0.12, 0.75, 0.24, 1);
+  --ripple-blur-default: none;
+}
+
 .ripple {
   pointer-events: none;
   position: absolute;
@@ -12,15 +32,63 @@
   width: 18px;
   height: 18px;
   background-color: currentColor;
-  filter: var(--ripple-blur, blur(0.4px));
+
+  filter: var(--ripple-blur, var(--ripple-blur-default));
+  box-shadow: 0 6px 14px rgba(8, 12, 20, 0.035);
+
   opacity: 1;
   transform: scale(1) translate3d(0,0,0);
-  will-change: transform, opacity, filter;
+  transform-origin: 50% 50%;
+
   transition:
-    transform var(--ripple-duration, 320ms) cubic-bezier(0.32, 0.05, 0.53, 1),
-    opacity var(--ripple-fade-duration, 600ms) cubic-bezier(0.4, 0, 0.2, 1),
-    filter 60ms cubic-bezier(0.4, 0, 0.2, 1);
+    transform calc(var(--ripple-duration, 420ms) * var(--ripple-duration-multiplier, 1)) var(--ripple-easing),
+    opacity calc(var(--ripple-fade-duration, 700ms) * var(--ripple-fade-multiplier, 1)) cubic-bezier(0.4, 0, 0.2, 1),
+    filter 90ms cubic-bezier(0.4, 0, 0.2, 1),
+    box-shadow 260ms var(--ripple-easing);
+
+  will-change: auto;
   contain: strict;
+  -webkit-backface-visibility: hidden;
+  backface-visibility: hidden;
+  -webkit-tap-highlight-color: transparent;
 }
-.ripple.animating { transform: scale(var(--ripple-final-scale, 1)) translate3d(0,0,0); }
-.ripple.fading { opacity: 0; }
+
+/* Subtle sheen (cheap paint) */
+.ripple::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  border-radius: 50%;
+  pointer-events: none;
+  background: radial-gradient(circle at 40% 35%, rgba(255,255,255,0.08) 0%, rgba(255,255,255,0.02) 28%, transparent 58%);
+  opacity: 0.82;
+  transform: scale(1);
+  transition:
+    transform calc(var(--ripple-duration, 420ms) * var(--ripple-duration-multiplier, 1)) var(--ripple-easing),
+    opacity calc(var(--ripple-fade-duration, 700ms) * var(--ripple-fade-multiplier, 1)) cubic-bezier(0.4, 0, 0.2, 1);
+  will-change: auto;
+}
+
+/* Only hint heavy paint during active phases */
+.ripple.animating,
+.ripple.fading {
+  will-change: transform, opacity, filter;
+}
+
+/* Hooks used by JS (unchanged) */
+.ripple.animating {
+  transform: scale(var(--ripple-final-scale, 1)) translate3d(0,0,0);
+}
+.ripple.animating::before {
+  transform: scale(calc(var(--ripple-final-scale, 1) * 1.04));
+  opacity: 1;
+}
+
+.ripple.fading {
+  opacity: 0;
+}
+.ripple.fading::before {
+  opacity: 0;
+}
+
+.ripple, .ripple::before { box-sizing: border-box; }

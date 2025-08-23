@@ -6,7 +6,7 @@
   <title>Material Ripple Professional Demo</title>
   <style>
     body {
-      background: #23272a;
+      background: #FFFFFF;
       display: flex;
       flex-direction: column;
       min-height: 100vh;
@@ -20,34 +20,64 @@
       padding: 20px 48px;
       border: none;
       border-radius: 14px;
-      background: #444;
-      color: #fff;
+      background: #E8E8E8;
+      color: #000000;
       cursor: pointer;
       position: relative;
       box-shadow: 0 2px 12px #0002;
       margin: 0 10px;
       transition: background 0.2s;
-      
     }
     .demo-box {
       background: #1976d2;
       color: #fff;
       border-radius: 100px;
-      padding: 28px 60px;
+      padding: 108px 60px;
     }
     button:focus-visible, .demo-box:focus-visible {
       outline: 2px solid #0ff6;
       outline-offset: 2px;
     }
+    /* Section Notice Example */
+    .notice {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      background: #E8E8E8;
+      padding: 18px 32px;
+      border-radius: 12px;
+      color: #000000;
+      margin: 24px 0;
+      font-size: 1.06rem;
+      box-shadow: 0 2px 10px #0002;
+      position: relative;
+      overflow: hidden;
+    }
+    .notice-icon {
+      font-size: 1.4em;
+    }
   </style>
+  <link rel="stylesheet" href="assets/wave-effect.min.css">
 </head>
 <body>
   <button wave>Material Ripple Default</button>
   <button wave=" c=rgba(255,0,0,0.5)">Custom Color Ripple</button>
-  <div class="demo-box" wave>Ripple on Box (Tab+Enter/Space)</div>
+  <div class="demo-box" wave="c=#FF0303">Ripple on Box (Tab+Enter/Space)</div>
   <button>Normal Button</button>
-  <button data-ripple-light="true">Material Ripple</button>
-<button data-ripple-dark="true">Material Ripple</button>
+
+  <!-- Demo: Link only -->
+  <a href="https://github.com/marcufer/Marcumat.js" class="demo-link" wave>Wave Link Example</a>
+
+  <!-- Demo: Section with link inside (previously problematic case) -->
+  <section class="notice">
+    <span class="notice-icon">💡</span>
+    <span>
+      Tip: You can change the website language anytime via the
+      <a href="/setting" class="demo-link" wave>Settings</a>
+      page!
+    </span>
+  </section>
+
   <script src="wave-effect.min.js"></script>
   <script crossorigin src="https://unpkg.com/material-ripple-effects/ripple.js"></script>
 </body>
