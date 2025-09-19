@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>Material Ripple Professional Demo</title>
+  <title>Material Ripple Professional Demo (with Delegate Test)</title>
   <style>
     body {
       background: #FFFFFF;
@@ -14,6 +14,7 @@
       justify-content: center;
       gap: 48px;
       font-family: system-ui, sans-serif;
+      -webkit-tap-highlight-color: transparent;
     }
     button, .demo-box {
       font-size: 1.2rem;
@@ -56,12 +57,41 @@
     .notice-icon {
       font-size: 1.4em;
     }
+    /* For Delegate Demo */
+    .outer-delegate-btn {
+      background: #ff9800;
+      color: #fff;
+      display: inline-flex;
+      align-items: center;
+      gap: 10px;
+      padding: 0;
+      border-radius: 16px;
+      border: none;
+      position: relative;
+      overflow: visible;
+      font-size: 1.2rem;
+    }
+    .child-with-wave {
+      padding: 18px 46px;
+      background: #fff;
+      color: #ff9800;
+      border-radius: 12px;
+      margin: 10px;
+      font-weight: bold;
+      font-size: 1.1em;
+      position: relative;
+      z-index: 2;
+    }
+    .outer-delegate-btn .icon {
+      font-size: 2em;
+      padding-left: 18px;
+    }
   </style>
-<script type="application/json" id="wave-setting-json">
-  {
-    "disableTapHighlight": true
-  }
-</script>
+  <script type="application/json" id="wave-setting-json">
+    {
+      "disableTapHighlight": true
+    }
+  </script>
   <link rel="stylesheet" href="assets/wave-effect.min.css">
 </head>
 <body>
@@ -82,6 +112,17 @@
       page!
     </span>
   </section>
+
+  <!-- == Delegate Ripple Test == -->
+  <button class="outer-delegate-btn" wave-delegate=".child-with-wave">
+    <span class="icon">🟠</span>
+    <span class="child-with-wave" wave>Ripple Only Here When Pressing Anywhere</span>
+    <span class="icon">➡️</span>
+  </button>
+  <div style="font-size: 0.98em; max-width: 480px; color: #ff9800;">
+    <b>Delegate Ripple Demo:</b><br>
+    กดที่ปุ่มสีส้ม (ตรงไหนก็ได้) ripple จะออกที่กล่องขาว (Child)
+  </div>
 
   <script src="wave-effect.min.js"></script>
   <script crossorigin src="https://unpkg.com/material-ripple-effects/ripple.js"></script>
