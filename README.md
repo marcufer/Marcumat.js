@@ -15,7 +15,7 @@ It’s fast, lightweight, and designed to be simple to use and configure.
 Add this script to your HTML file (in `<head>` or before `</body>`):
 
 ```html
-<script src="https://marcufer.github.io/Marcumat.js/wave-effect.min.js" type="text/javascript" charset="utf-8"></script>
+<script src="https://marcufer.github.io/Marcumat.js/wave-effect.min.js"></script>
 ```
 Marcumat.js will automatically load its required CSS for you.
 
