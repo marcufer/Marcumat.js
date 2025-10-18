@@ -119,3 +119,41 @@
 
 /* Keep box-sizing consistent */
 .ripple, .ripple::before { box-sizing: border-box; }
+
+/* --- Performance-specific variable overrides ---
+   JS also adds .wave-low-performance / .wave-medium-performance / .wave-high-performance to <html>
+   so the CSS can tune variables without changing JS behavior.
+*/
+
+:root.wave-low-performance {
+  /* shorter global durations to free up render time */
+  --ripple-duration-multiplier: 0.85;
+  --ripple-fade-multiplier: 0.9;
+  /* avoid blur (expensive) on low-end devices */
+  --ripple-blur-default: none;
+  --ripple-blur-duration: 80ms;
+  /* reduce sheen to avoid extra paint */
+  --ripple-sheen-opacity: 0.6;
+}
+
+:root.wave-medium-performance {
+  --ripple-duration-multiplier: 1.0;
+  --ripple-fade-multiplier: 1.0;
+  --ripple-blur-default: blur(0.5px);
+  --ripple-blur-duration: 180ms;
+  --ripple-sheen-opacity: 0.74;
+}
+
+:root.wave-high-performance {
+  --ripple-duration-multiplier: 1.15;
+  --ripple-fade-multiplier: 1.0;
+  --ripple-blur-default: blur(0.9px);
+  --ripple-blur-duration: 260ms;
+  --ripple-sheen-opacity: 0.86;
+}
+
+/* Also reduce paint on low-perf when ripple animates */
+.wave-low-performance .ripple.animating,
+.wave-low-performance .ripple.fading {
+  box-shadow: 0 3px 8px rgba(8,12,20,0.03);
+}
