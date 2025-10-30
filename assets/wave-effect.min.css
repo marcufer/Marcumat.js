@@ -16,16 +16,16 @@
 :root{
   /* Base fallback; JS will usually write per-ripple --ripple-duration */
   --ripple-duration: 380ms;
-  /* Subtle global tuning to make expansion feel professional (slightly faster than older 1.25) */
-  --ripple-duration-multiplier: 1.1;
+  /* Global tuning: increased substantially so CSS-level transitions slow down notably */
+  --ripple-duration-multiplier: 2.0;
 
-  /* Fade tuning */
-  --ripple-fade-duration: 540ms;
+  /* Fade tuning - increased strongly so fade is much slower (more graceful) */
+  --ripple-fade-duration: 1400ms;
   --ripple-fade-multiplier: 1.0;
 
-  /* Blur tuning and transitions */
-  --ripple-blur-default: none;
-  --ripple-blur-duration: 260ms;
+  /* Blur tuning and transitions - softer, cheaper blur by default */
+  --ripple-blur-default: blur(0.6px);
+  --ripple-blur-duration: 180ms;
   --ripple-blur-easing: cubic-bezier(0.2, 0.9, 0.32, 1);
 
   /* gentle ease for expansion */
@@ -54,7 +54,8 @@
 
   /* Filter is transitioned — JS sets --ripple-blur per ripple (e.g., blur(0.9px)) */
   filter: var(--ripple-blur, var(--ripple-blur-default));
-  box-shadow: 0 6px 18px rgba(8, 12, 20, 0.04);
+  /* Lighter shadow to reduce paint cost */
+  box-shadow: 0 4px 12px rgba(8, 12, 20, 0.04);
 
   opacity: 1;
   transform: scale(1) translate3d(0,0,0);
@@ -93,8 +94,8 @@
 .ripple.animating,
 .ripple.fading {
   will-change: transform, opacity, filter;
-  /* Slightly lift shadow while animating for perceived depth */
-  box-shadow: 0 8px 22px rgba(8, 12, 20, 0.045);
+  /* Slightly lift shadow while animating for perceived depth - kept moderate to avoid heavy paint */
+  box-shadow: 0 6px 14px rgba(8, 12, 20, 0.045);
 }
 
 /* Hooks used by JS (unchanged) */
@@ -122,7 +123,7 @@
 
 /* --- Performance-specific variable overrides ---
    JS also adds .wave-low-performance / .wave-medium-performance / .wave-high-performance to <html>
-   so the CSS can tune variables without changing JS behavior.
+   so the CSS can tune variables for different performance tiers.
 */
 
 :root.wave-low-performance {
@@ -134,21 +135,23 @@
   --ripple-blur-duration: 80ms;
   /* reduce sheen to avoid extra paint */
   --ripple-sheen-opacity: 0.6;
+  /* Lighter shadow */
+  --ripple-shadow: 0 3px 8px rgba(8,12,20,0.03);
 }
 
 :root.wave-medium-performance {
-  --ripple-duration-multiplier: 1.0;
+  --ripple-duration-multiplier: 1.25;
   --ripple-fade-multiplier: 1.0;
-  --ripple-blur-default: blur(0.5px);
-  --ripple-blur-duration: 180ms;
-  --ripple-sheen-opacity: 0.74;
+  --ripple-blur-default: blur(0.45px);
+  --ripple-blur-duration: 160ms;
+  --ripple-sheen-opacity: 0.72;
 }
 
 :root.wave-high-performance {
-  --ripple-duration-multiplier: 1.15;
+  --ripple-duration-multiplier: 2.3;
   --ripple-fade-multiplier: 1.0;
-  --ripple-blur-default: blur(0.9px);
-  --ripple-blur-duration: 260ms;
+  --ripple-blur-default: blur(0.7px);
+  --ripple-blur-duration: 200ms;
   --ripple-sheen-opacity: 0.86;
 }
 
