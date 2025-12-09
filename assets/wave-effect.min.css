@@ -6,26 +6,22 @@
   vertical-align: middle;
 }
 
-/* Slower, more deliberate ripple expansion
-   - JS writes --ripple-duration per ripple (scaled by INTERNAL_SPEED_MULTIPLIER).
-   - CSS multiplier below gives an additional global tuning knob.
-   - All class names and CSS variable names remain identical so JS integration is unchanged.
-   - will-change is applied only during active phases to minimize GPU cost.
+/* Simplified timings:
+   - Only two timing variables remain:
+     --ripple-duration: transform/expansion duration
+     --ripple-fade-duration: opacity fade duration
 */
 
 :root{
-  /* Base fallback; JS will usually write per-ripple --ripple-duration */
-  --ripple-duration: 380ms;
-  /* Global tuning: increased substantially so CSS-level transitions slow down notably */
-  --ripple-duration-multiplier: 2.0;
+  /* Expansion duration made substantially slower */
+  --ripple-duration: 1200ms;
 
-  /* Fade tuning - increased strongly so fade is much slower (more graceful) */
-  --ripple-fade-duration: 1400ms;
-  --ripple-fade-multiplier: 1.0;
+  /* Single fade timing for all fades (unchanged) */
+  --ripple-fade-duration: 800ms;
 
-  /* Blur tuning and transitions - softer, cheaper blur by default */
+  /* Blur tuning and transitions */
   --ripple-blur-default: blur(0.6px);
-  --ripple-blur-duration: 180ms;
+  --ripple-blur-duration: 120ms;
   --ripple-blur-easing: cubic-bezier(0.2, 0.9, 0.32, 1);
 
   /* gentle ease for expansion */
@@ -38,9 +34,9 @@
 /* Respect user's reduced motion preference */
 @media (prefers-reduced-motion: reduce) {
   :root {
-    --ripple-duration-multiplier: 1;
     --ripple-blur-duration: 1ms;
     --ripple-fade-duration: 120ms;
+    --ripple-duration: 220ms;
   }
 }
 
@@ -52,9 +48,7 @@
   height: 18px;
   background-color: currentColor;
 
-  /* Filter is transitioned — JS sets --ripple-blur per ripple (e.g., blur(0.9px)) */
   filter: var(--ripple-blur, var(--ripple-blur-default));
-  /* Lighter shadow to reduce paint cost */
   box-shadow: 0 4px 12px rgba(8, 12, 20, 0.04);
 
   opacity: 1;
@@ -62,9 +56,9 @@
   transform-origin: 50% 50%;
 
   transition:
-    transform calc(var(--ripple-duration, 420ms) * var(--ripple-duration-multiplier, 1)) var(--ripple-easing),
-    opacity calc(var(--ripple-fade-duration, 700ms) * var(--ripple-fade-multiplier, 1)) cubic-bezier(0.4, 0, 0.2, 1),
-    filter calc(var(--ripple-blur-duration, 260ms)) var(--ripple-blur-easing),
+    transform var(--ripple-duration) var(--ripple-easing),
+    opacity var(--ripple-fade-duration) cubic-bezier(0.4, 0, 0.2, 1),
+    filter var(--ripple-blur-duration) var(--ripple-blur-easing),
     box-shadow 260ms var(--ripple-easing);
 
   will-change: auto;
@@ -74,7 +68,6 @@
   -webkit-tap-highlight-color: transparent;
 }
 
-/* Subtle sheen (cheap paint) */
 .ripple::before {
   content: "";
   position: absolute;
@@ -85,23 +78,19 @@
   opacity: var(--ripple-sheen-opacity, 0.82);
   transform: scale(1);
   transition:
-    transform calc(var(--ripple-duration, 420ms) * var(--ripple-duration-multiplier, 1)) var(--ripple-easing),
-    opacity calc(var(--ripple-fade-duration, 700ms) * var(--ripple-fade-multiplier, 1)) cubic-bezier(0.4, 0, 0.2, 1);
+    transform var(--ripple-duration) var(--ripple-easing),
+    opacity var(--ripple-fade-duration) cubic-bezier(0.4, 0, 0.2, 1);
   will-change: auto;
 }
 
-/* Only hint heavy paint during active phases */
 .ripple.animating,
 .ripple.fading {
   will-change: transform, opacity, filter;
-  /* Slightly lift shadow while animating for perceived depth - kept moderate to avoid heavy paint */
   box-shadow: 0 6px 14px rgba(8, 12, 20, 0.045);
 }
 
-/* Hooks used by JS (unchanged) */
 .ripple.animating {
   transform: scale(var(--ripple-final-scale, 1)) translate3d(0,0,0);
-  /* While expanding we keep a gentle blur */
   filter: var(--ripple-blur, var(--ripple-blur-default));
 }
 .ripple.animating::before {
@@ -109,7 +98,6 @@
   opacity: 1;
 }
 
-/* Fade to clear: reduce blur smoothly as it fades out to avoid abrupt visual pops */
 .ripple.fading {
   opacity: 0;
   filter: blur(0px);
@@ -118,44 +106,27 @@
   opacity: 0;
 }
 
-/* Keep box-sizing consistent */
 .ripple, .ripple::before { box-sizing: border-box; }
 
-/* --- Performance-specific variable overrides ---
-   JS also adds .wave-low-performance / .wave-medium-performance / .wave-high-performance to <html>
-   so the CSS can tune variables for different performance tiers.
-*/
-
 :root.wave-low-performance {
-  /* shorter global durations to free up render time */
-  --ripple-duration-multiplier: 0.85;
-  --ripple-fade-multiplier: 0.9;
-  /* avoid blur (expensive) on low-end devices */
   --ripple-blur-default: none;
   --ripple-blur-duration: 80ms;
-  /* reduce sheen to avoid extra paint */
   --ripple-sheen-opacity: 0.6;
-  /* Lighter shadow */
   --ripple-shadow: 0 3px 8px rgba(8,12,20,0.03);
 }
 
 :root.wave-medium-performance {
-  --ripple-duration-multiplier: 1.25;
-  --ripple-fade-multiplier: 1.0;
   --ripple-blur-default: blur(0.45px);
   --ripple-blur-duration: 160ms;
   --ripple-sheen-opacity: 0.72;
 }
 
 :root.wave-high-performance {
-  --ripple-duration-multiplier: 2.3;
-  --ripple-fade-multiplier: 1.0;
   --ripple-blur-default: blur(0.7px);
   --ripple-blur-duration: 200ms;
   --ripple-sheen-opacity: 0.86;
 }
 
-/* Also reduce paint on low-perf when ripple animates */
 .wave-low-performance .ripple.animating,
 .wave-low-performance .ripple.fading {
   box-shadow: 0 3px 8px rgba(8,12,20,0.03);
