@@ -7,22 +7,15 @@
 }
 
 /* Simplified timings:
-   - Only two timing variables remain:
+   - Two timing variables remain:
      --ripple-duration: transform/expansion duration
      --ripple-fade-duration: opacity fade duration
+   - Blur removed; contain usage reduced to avoid layer/paint glitches.
 */
 
 :root{
-  /* Expansion duration made substantially slower */
-  --ripple-duration: 1200ms;
-
-  /* Single fade timing for all fades (unchanged) */
+  --ripple-duration: 2500ms;
   --ripple-fade-duration: 800ms;
-
-  /* Blur tuning and transitions */
-  --ripple-blur-default: blur(0.6px);
-  --ripple-blur-duration: 120ms;
-  --ripple-blur-easing: cubic-bezier(0.2, 0.9, 0.32, 1);
 
   /* gentle ease for expansion */
   --ripple-easing: cubic-bezier(0.12, 0.75, 0.24, 1);
@@ -34,7 +27,6 @@
 /* Respect user's reduced motion preference */
 @media (prefers-reduced-motion: reduce) {
   :root {
-    --ripple-blur-duration: 1ms;
     --ripple-fade-duration: 120ms;
     --ripple-duration: 220ms;
   }
@@ -48,7 +40,10 @@
   height: 18px;
   background-color: currentColor;
 
-  filter: var(--ripple-blur, var(--ripple-blur-default));
+  /* No filter/blur used */
+  filter: none;
+
+  /* Lighter shadow to reduce paint cost */
   box-shadow: 0 4px 12px rgba(8, 12, 20, 0.04);
 
   opacity: 1;
@@ -58,16 +53,15 @@
   transition:
     transform var(--ripple-duration) var(--ripple-easing),
     opacity var(--ripple-fade-duration) cubic-bezier(0.4, 0, 0.2, 1),
-    filter var(--ripple-blur-duration) var(--ripple-blur-easing),
     box-shadow 260ms var(--ripple-easing);
 
   will-change: auto;
-  contain: strict;
   -webkit-backface-visibility: hidden;
   backface-visibility: hidden;
   -webkit-tap-highlight-color: transparent;
 }
 
+/* Subtle sheen */
 .ripple::before {
   content: "";
   position: absolute;
@@ -85,13 +79,13 @@
 
 .ripple.animating,
 .ripple.fading {
-  will-change: transform, opacity, filter;
+  will-change: transform, opacity;
   box-shadow: 0 6px 14px rgba(8, 12, 20, 0.045);
 }
 
 .ripple.animating {
   transform: scale(var(--ripple-final-scale, 1)) translate3d(0,0,0);
-  filter: var(--ripple-blur, var(--ripple-blur-default));
+  filter: none;
 }
 .ripple.animating::before {
   transform: scale(calc(var(--ripple-final-scale, 1) * 1.04));
@@ -100,7 +94,7 @@
 
 .ripple.fading {
   opacity: 0;
-  filter: blur(0px);
+  filter: none;
 }
 .ripple.fading::before {
   opacity: 0;
@@ -108,22 +102,17 @@
 
 .ripple, .ripple::before { box-sizing: border-box; }
 
+/* Performance-specific tuning (shadow/pool only) */
 :root.wave-low-performance {
-  --ripple-blur-default: none;
-  --ripple-blur-duration: 80ms;
   --ripple-sheen-opacity: 0.6;
   --ripple-shadow: 0 3px 8px rgba(8,12,20,0.03);
 }
 
 :root.wave-medium-performance {
-  --ripple-blur-default: blur(0.45px);
-  --ripple-blur-duration: 160ms;
   --ripple-sheen-opacity: 0.72;
 }
 
 :root.wave-high-performance {
-  --ripple-blur-default: blur(0.7px);
-  --ripple-blur-duration: 200ms;
   --ripple-sheen-opacity: 0.86;
 }
 
