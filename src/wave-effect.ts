@@ -1,8 +1,15 @@
-contents:
 ///////////////////////////////////////////////////////////////////////////////
 // wave-effect (TypeScript)
-// Converted from original JS with type annotations and small API tidy-ups.
-// Build: compile to UMD or a browser bundle. See tsconfig.json included.
+// Converted from original JS with type annotations and a small, explicit API.
+// - Designed to be compiled to JS (both IIFE/global and ESM)
+// - Works in browsers; attaches to window.WaveEffect when used as a script tag.
+//
+// Public API (after bundle):
+//   WaveEffect.upgradeAll()
+//   WaveEffect.upgradeElement(el)
+//   WaveEffect.clearRipples(el)
+//   WaveEffect.config.setFadeDuration(ms)
+//
 ///////////////////////////////////////////////////////////////////////////////
 
 type Maybe<T> = T | null | undefined;
@@ -13,10 +20,6 @@ interface ElData {
   gradient?: string | undefined;
   rect?: DOMRect | undefined;
   _colorStamp?: number;
-}
-
-interface RippleMap {
-  [key: string]: any;
 }
 
 const RIPPLE_CLASS = 'ripple';
@@ -37,7 +40,7 @@ const now = (): number => (typeof performance !== 'undefined' && (performance as
 const sqrt2 = Math.SQRT2 || Math.sqrt(2);
 
 // template node used for cloning
-const _tpl: HTMLElement = ((): HTMLElement => {
+const _tpl: HTMLElement = (() => {
   const s = document.createElement('span');
   s.className = RIPPLE_CLASS + ' dynamic-halo-pro';
   s.style.display = 'none';
@@ -70,15 +73,16 @@ function schedule(fn: () => void) {
 
 function detectPerformanceLevel(): 'low'|'medium'|'high' {
   try {
-    const cores = (navigator && (navigator as Navigator & { hardwareConcurrency?: number }).hardwareConcurrency) ? (navigator as any).hardwareConcurrency : 4;
-    const mem = (navigator && (navigator as any).deviceMemory) ? (navigator as any).deviceMemory : 4;
-    const ua = (navigator && navigator.userAgent) ? navigator.userAgent : '';
+    const nav = navigator as any;
+    const cores = nav.hardwareConcurrency ? nav.hardwareConcurrency : 4;
+    const mem = nav.deviceMemory ? nav.deviceMemory : 4;
+    const ua = navigator.userAgent || '';
     if (cores <= 2 || (mem && mem <= 1.5) || /Android\s([0-8])/.test(ua)) return 'low';
     if (cores <= 4 || (mem && mem <= 3)) return 'medium';
     return 'high';
   } catch (e) { return 'high'; }
 }
-const PERF_LEVEL = detectPerformanceLevel();
+const PERF_LEVEL = (typeof window !== 'undefined') ? detectPerformanceLevel() : 'high';
 try {
   if (typeof document !== 'undefined' && document.documentElement) {
     if (PERF_LEVEL === 'low') document.documentElement.classList.add('wave-low-performance');
@@ -484,7 +488,7 @@ let isRapidScrollFlag = false;
   document.addEventListener('touchcancel', onTouchEnd, { passive: true });
   window.addEventListener('scroll', onScroll, { passive: true });
 
-  // expose to onPointerDown
+  // expose to onPointerDown (read-only-ish)
   (onPointerDown as any)._isRapidScrollFlag = isRapidScrollFlag;
 })();
 
@@ -620,4 +624,5 @@ declare const globalThis: any;
 if (typeof window !== 'undefined') {
   (window as any).WaveEffect = WaveEffect;
 }
+
 export default WaveEffect;
