@@ -10,9 +10,7 @@
    - Two timing variables remain:
      --ripple-duration: transform/expansion duration
      --ripple-fade-duration: opacity fade duration
-   - Use a dedicated overlay per element to avoid repeated layout churn,
-     and use paint containment for the overlay to isolate ripple paints
-     where supported. Keep visual output identical to previous release.
+   - Blur removed; contain usage reduced to avoid layer/paint glitches.
 */
 
 :root{
@@ -34,23 +32,6 @@
   }
 }
 
-/* Per-element overlay used to host ripples. This avoids toggling the
-   surface element's layout/display and reduces repaint/layer thrash.
-   'contain: paint' isolates painting work where supported without
-   changing visual stacking. */
-.wave-ripple-overlay {
-  position: absolute;
-  inset: 0;
-  pointer-events: none;
-  overflow: visible;
-  z-index: 1;
-  transform: translateZ(0);
-  /* isolate paint to avoid affecting ancestor painting when possible */
-  contain: paint;
-  will-change: transform, opacity;
-}
-
-/* Legacy ripple node */
 .ripple {
   pointer-events: none;
   position: absolute;
@@ -78,18 +59,6 @@
   -webkit-backface-visibility: hidden;
   backface-visibility: hidden;
   -webkit-tap-highlight-color: transparent;
-  display: block;
-}
-
-/* Hidden / recycled state (do not use display:none because it can
-   cause reflow; keep nodes in overlay and use opacity/visibility to
-   recycle without layout churn) */
-.ripple.recycled {
-  opacity: 0;
-  visibility: hidden;
-  pointer-events: none;
-  transform: scale(0.999) translate3d(0,0,0);
-  transition: none !important;
 }
 
 /* Subtle sheen */
