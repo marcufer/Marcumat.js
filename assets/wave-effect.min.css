@@ -32,24 +32,6 @@
   }
 }
 
-/* Portal container (created/managed by JS) */
-.wave-portal {
-  position: fixed;
-  inset: 0;
-  pointer-events: none;
-  z-index: 2147483000;
-}
-
-/* Per-host wrapper inside portal that mimics host clip/shape */
-.ripple-portal-wrapper {
-  position: absolute;
-  overflow: hidden;
-  pointer-events: none;
-  will-change: left, top, width, height;
-  -webkit-tap-highlight-color: transparent;
-}
-
-/* ripple node visuals */
 .ripple {
   pointer-events: none;
   position: absolute;
@@ -61,22 +43,25 @@
   /* No filter/blur used */
   filter: none;
 
-  /* Lighter shadow to reduce paint cost */
+  /* Lighter shadow to reduce paint cost (static, NOT transitioned) */
   box-shadow: 0 4px 12px rgba(8, 12, 20, 0.04);
 
   opacity: 1;
   transform: scale(1) translate3d(0,0,0);
   transform-origin: 50% 50%;
 
+  /* Only animate compositor-friendly properties */
   transition:
     transform var(--ripple-duration) var(--ripple-easing),
-    opacity var(--ripple-fade-duration) cubic-bezier(0.4, 0, 0.2, 1),
-    box-shadow 260ms var(--ripple-easing);
+    opacity var(--ripple-fade-duration) cubic-bezier(0.4, 0, 0.2, 1);
 
-  will-change: auto;
+  /* keep will-change stable via CSS so the compositor can prepare layers */
+  will-change: transform, opacity;
   -webkit-backface-visibility: hidden;
   backface-visibility: hidden;
   -webkit-tap-highlight-color: transparent;
+  /* push to its own layer aggressively */
+  transform: translate3d(0,0,0) scale(1);
 }
 
 /* Subtle sheen */
@@ -92,15 +77,15 @@
   transition:
     transform var(--ripple-duration) var(--ripple-easing),
     opacity var(--ripple-fade-duration) cubic-bezier(0.4, 0, 0.2, 1);
-  will-change: auto;
+  will-change: transform, opacity;
 }
 
 .ripple.animating,
 .ripple.fading {
-  will-change: transform, opacity;
-  box-shadow: 0 6px 14px rgba(8, 12, 20, 0.045);
+  /* keep will-change static (handled by base .ripple), avoid changing box-shadow here */
 }
 
+/* Animating uses transform-only updates (compositor) */
 .ripple.animating {
   transform: scale(var(--ripple-final-scale, 1)) translate3d(0,0,0);
   filter: none;

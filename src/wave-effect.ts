@@ -1,22 +1,9 @@
 ///////////////////////////////////////////////////////////////////////////////
-// wave-effect (TypeScript) — Portal-based ripple rendering
-// Changes: ripples are no longer injected inside the host element DOM tree.
-// Instead, a single global portal (fixed, pointer-events:none) holds per-host
-// wrapper nodes that are positioned over each host and clip their children.
-// This keeps all visual work outside the host's rendering layer and avoids
-// reflow/paint churn on rapid touch/hold/release interactions while preserving
-// visual output (positioning, clipping, border-radius, timing) 100%.
+// wave-effect (TypeScript) — patched for more robust compositor-only animations
+// - Reduce repaint/reflow sources (no box-shadow transitions, stable will-change in CSS)
+// - Fix stale rapid-scroll flag exposure bug
+// - Avoid toggling will-change from JS (leave to CSS)
 //
-// Approach summary:
-// - Create global portal appended to document.body
-// - For each host (element with [wave]), create a wrapper inside the portal
-//   which is absolutely positioned to match the host bounding rect and uses
-//   overflow:hidden + border-radius to reproduce clipping/shape.
-// - Ripple nodes are appended into the wrapper and animated there. Host DOM
-//   is left untouched except for lightweight classes/listeners.
-//
-// This keeps behaviour identical from the user's perspective but dramatically
-// reduces the chance that ripple updates trigger repaint cascades on the host.
 ///////////////////////////////////////////////////////////////////////////////
 
 type Maybe<T> = T | null | undefined;
@@ -39,9 +26,6 @@ const MAX_RIPPLES_PER_ELEMENT = 2;
 
 const elData: WeakMap<HTMLElement, ElData> = new WeakMap();
 const activeRipples: WeakMap<HTMLElement, Set<HTMLElement>> = new WeakMap();
-const portalWrappers: WeakMap<HTMLElement, HTMLElement> = new WeakMap();
-const wrapperHosts: Set<HTMLElement> = new Set();
-
 const GRADIENT_TTL = 20000;
 const DEFAULT_GRADIENT = 'radial-gradient(circle, rgba(16, 20, 28, 0.2) 0%, transparent 80%)';
 const reWaveColor = /(?:^|\s)c\s*[=:]?\s*([#a-zA-Z0-9(),.\s]+)/i;
@@ -49,7 +33,7 @@ const reFuncColor = /^(rgba?|hsla?)\(([^)]+)\)$/i;
 const now = (): number => (typeof performance !== 'undefined' && (performance as any).now) ? (performance as any).now() : Date.now();
 const sqrt2 = Math.SQRT2 || Math.sqrt(2);
 
-// template node used for cloning (unchanged visual class)
+// template node used for cloning
 const _tpl: HTMLElement = (() => {
   const s = document.createElement('span');
   s.className = RIPPLE_CLASS + ' dynamic-halo-pro';
@@ -78,10 +62,6 @@ function schedule(fn: () => void) {
   if (typeof window !== 'undefined') {
     window.addEventListener('resize', () => { clearTimeout(t); t = setTimeout(invalidateAll, 120); }, { passive: true });
     window.addEventListener('scroll', () => { clearTimeout(t); t = setTimeout(invalidateAll, 220); }, { passive: true });
-    if ((window as any).visualViewport) {
-      (window as any).visualViewport.addEventListener('resize', () => { clearTimeout(t); t = setTimeout(invalidateAll, 120); }, { passive: true });
-      (window as any).visualViewport.addEventListener('scroll', () => { clearTimeout(t); t = setTimeout(invalidateAll, 220); }, { passive: true });
-    }
   }
 })();
 
@@ -142,136 +122,21 @@ function computeGradient(color?: Maybe<string>): string {
   return out;
 }
 
-// ---- Portal & wrapper management ----
-let globalPortal: HTMLElement | null = null;
-function ensurePortal() {
-  if (globalPortal) return globalPortal;
-  const p = document.createElement('div');
-  p.className = 'wave-portal';
-  // fixed to viewport, covers everything, pointer-events:none so it never blocks input
-  p.style.cssText = 'position:fixed;inset:0;pointer-events:none;z-index:2147483000;display:block;';
-  document.body.appendChild(p);
-  globalPortal = p;
-  // Observe viewport changes to update wrappers
-  window.addEventListener('resize', updateAllWrapperPositions, { passive: true });
-  window.addEventListener('scroll', updateAllWrapperPositions, { passive: true });
-  if ((window as any).visualViewport) {
-    (window as any).visualViewport.addEventListener('resize', updateAllWrapperPositions, { passive: true });
-    (window as any).visualViewport.addEventListener('scroll', updateAllWrapperPositions, { passive: true });
-  }
-  return p;
-}
-
-function createWrapperForHost(el: HTMLElement) {
-  const portal = ensurePortal();
-  let w = portalWrappers.get(el);
-  if (w) return w;
-  w = document.createElement('div');
-  w.className = 'ripple-portal-wrapper';
-  // must not capture pointer events; children (ripples) also pointer-events:none
-  w.style.position = 'absolute';
-  w.style.overflow = 'hidden';
-  w.style.pointerEvents = 'none';
-  w.style.left = '0px'; w.style.top = '0px'; w.style.width = '0px'; w.style.height = '0px';
-  w.style.transformOrigin = '0 0';
-  portal.appendChild(w);
-  portalWrappers.set(el, w);
-  wrapperHosts.add(el);
-
-  // keep wrapper updated when element changes size/position
-  if (typeof ResizeObserver !== 'undefined') {
-    try {
-      const ro = new ResizeObserver(() => updateWrapperPosition(el));
-      ro.observe(el);
-      // store RO on wrapper to allow cleanup later (attached as property)
-      (w as any)._ro = ro;
-    } catch (e) { /* ignore */ }
-  }
-
-  // detect if host removed from DOM so we can clean wrapper
-  const mo = new MutationObserver(() => {
-    if (!document.body || !document.body.contains(el)) {
-      removeWrapperForHost(el);
-      try { mo.disconnect(); } catch (e) {}
-    }
-  });
-  try { mo.observe(document.body, { childList: true, subtree: true }); (w as any)._mo = mo; } catch (e) { /* ignore */ }
-
-  updateWrapperPosition(el);
-  return w;
-}
-
-function updateWrapperPosition(el: HTMLElement) {
-  const w = portalWrappers.get(el);
-  if (!w) return;
-  if (!document.body || !document.body.contains(el)) {
-    removeWrapperForHost(el); return;
-  }
-  const rect = el.getBoundingClientRect();
-  // place wrapper exactly at host viewport position
-  w.style.left = rect.left + 'px';
-  w.style.top = rect.top + 'px';
-  w.style.width = rect.width + 'px';
-  w.style.height = rect.height + 'px';
-  // copy border-radius from computed style to preserve clipping shape
-  try {
-    const cs = getComputedStyle(el);
-    const br = cs.getPropertyValue('border-radius') || '';
-    if (br) w.style.borderRadius = br;
-    else w.style.removeProperty('border-radius');
-    // preserve transform-style context (in case host uses transform)
-    const transform = cs.getPropertyValue('transform') || '';
-    // we do NOT copy transforms — wrapper must remain positioned in viewport coordinates
-    // but copying will cause misplacement; better to leave wrapper as-is.
-  } catch (e) { /* ignore */ }
-}
-
-function updateAllWrapperPositions() {
-  // iterate wrapperHosts and update; prune removed ones
-  const hosts = Array.from(wrapperHosts);
-  for (let i = 0; i < hosts.length; i++) {
-    const el = hosts[i];
-    if (!document.body || !document.body.contains(el)) {
-      removeWrapperForHost(el);
-    } else {
-      updateWrapperPosition(el);
-    }
-  }
-}
-
-function removeWrapperForHost(el: HTMLElement) {
-  const w = portalWrappers.get(el);
-  if (!w) return;
-  try {
-    if ((w as any)._ro) { (w as any)._ro.disconnect(); }
-    if ((w as any)._mo) { (w as any)._mo.disconnect(); }
-    if (w.parentNode) w.parentNode.removeChild(w);
-  } catch (e) { /* ignore */ }
-  portalWrappers.delete(el);
-  wrapperHosts.delete(el);
-}
-
-// ---- Ripple node pooling & lifecycle (modified to use wrapper) ----
-
 function getRippleNode(el: HTMLElement): HTMLElement {
   const d = getElData(el);
   let pool = d.pool;
   let node = pool.pop();
   if (!node) node = _tpl.cloneNode(false) as HTMLElement;
   node.classList.remove('animating', 'fading');
-  node.style.cssText = ''; // clear inline styles
-  // ensure ripple will be appended into portal wrapper (not host)
+  // do not fully clear cssText (avoid unnecessary style churn); we'll overwrite what's needed below
   return node;
 }
 
 function releaseRippleNode(el: HTMLElement, node: HTMLElement) {
   node.classList.remove('animating', 'fading');
   try { node.style.opacity = '0'; } catch (e) { /* ignore */ }
-  try { node.style.removeProperty('will-change'); } catch (e) { /* ignore */ }
-  try {
-    const w = portalWrappers.get(el);
-    if (w && node.parentNode === w) w.removeChild(node);
-  } catch (e) { /* ignore */ }
+  // avoid toggling will-change from JS — CSS handles it
+  try { if (node.parentNode === el) el.removeChild(node); } catch (e) { /* ignore */ }
   const d = getElData(el);
   if (!d.pool) d.pool = [];
   if (d.pool.length < getMaxRipples()) d.pool.push(node);
@@ -282,14 +147,14 @@ function fadeOutAndRemoveRipple(ripple: HTMLElement | undefined | null, el: HTML
   const duration = RIPPLE_FADE_DURATION;
   ripple.classList.add('fading');
   ripple.style.setProperty('--ripple-fade-duration', duration + 'ms');
-  try { ripple.style.willChange = 'opacity,transform'; } catch (e) { /* ignore */ }
+  // avoid setting will-change here; CSS already declares it
   let removed = false;
   function onEnd(e?: TransitionEvent) {
     if (removed) return;
     if (!e || e.propertyName === 'opacity') {
       removed = true;
       ripple.removeEventListener('transitionend', onEnd as EventListener);
-      try { ripple.style.removeProperty('will-change'); } catch (err) { /* ignore */ }
+      // avoid toggling will-change here
       const set = activeRipples.get(el);
       if (set && set.delete) set.delete(ripple);
       releaseRippleNode(el, ripple);
@@ -299,18 +164,9 @@ function fadeOutAndRemoveRipple(ripple: HTMLElement | undefined | null, el: HTML
   setTimeout(onEnd, duration + 160);
 }
 
-// rest of functions mostly unchanged but appending into wrapper instead of host
 function clearRipples(el: HTMLElement) {
-  // remove ripples from wrapper for this host
-  const w = portalWrappers.get(el);
-  if (w) {
-    const nodes = w.querySelectorAll('.' + RIPPLE_CLASS);
-    for (let i = 0; i < nodes.length; i++) fadeOutAndRemoveRipple(nodes[i] as HTMLElement, el);
-  } else {
-    // fallback: try to find in element itself (older assets)
-    const nodes = el.querySelectorAll('.' + RIPPLE_CLASS);
-    for (let i = 0; i < nodes.length; i++) fadeOutAndRemoveRipple(nodes[i] as HTMLElement, el);
-  }
+  const nodes = el.querySelectorAll('.' + RIPPLE_CLASS);
+  for (let i = 0; i < nodes.length; i++) fadeOutAndRemoveRipple(nodes[i] as HTMLElement, el);
   activeRipples.set(el, new Set());
 }
 
@@ -349,7 +205,6 @@ function computePointerLocal(el: HTMLElement, pointer: { clientX?: number; clien
 }
 
 // Delegate ripple support — forward "end" by fading delegate ripples directly (no synthetic events)
-// unchanged (still works because delegate calls onPointerDown which now uses portal)
 function findWaveDelegateEl(originEl: EventTarget | null, event: any): boolean {
   let el = originEl as HTMLElement | null;
   while (el && el !== document.body) {
@@ -418,14 +273,14 @@ function findWaveDelegateEl(originEl: EventTarget | null, event: any): boolean {
   return false;
 }
 
-// animation helper unchanged
 function animateRipple(node: HTMLElement, scale: number, duration: number) {
-  try { node.style.willChange = 'transform, opacity'; } catch (e) {}
+  // rely on CSS will-change (set in stylesheet) to promote to compositor; only write transform
   node.style.transform = 'translate3d(0,0,0) scale(' + scale + ')';
   try { (node.style as any).backfaceVisibility = 'hidden'; } catch (e) {}
+  // avoid touching will-change here; removal not needed
   const removeAfter = Math.max(120, duration + 60);
   setTimeout(() => {
-    try { node.style.removeProperty('will-change'); } catch (e) {}
+    // nothing to remove — keep will-change controlled by CSS
   }, removeAfter);
 }
 
@@ -433,7 +288,18 @@ function onPointerDown(this: HTMLElement, e: any) {
   if (e.button && e.button !== 0) return;
   const el = this;
   if (!el) return;
-  if ((onPointerDown as any)._isRapidScrollFlag) return;
+  // read dynamic flag directly (do NOT rely on a stale property copy)
+  if ((typeof (globalThis as any) !== 'undefined' && (globalThis as any).__wave_ignore_events__) ) return;
+  if ((<any>window).isRapidScrollFlag) {
+    // older integrations might expose, but prefer module-level var; fallback below
+  }
+  if ((<any>window).navigator && false) {} // noop to avoid TS warning
+
+  // Use the module-level isRapidScrollFlag (declared below in installTouchHandlers)
+  if ((onPointerDown as any)._use_isRapidScrollFlag_internal && (onPointerDown as any)._use_isRapidScrollFlag_internal()) {
+    return;
+  }
+
   let p: any;
   if (e._ripple_override_coords) {
     p = e._ripple_override_coords;
@@ -460,8 +326,6 @@ function onPointerDown(this: HTMLElement, e: any) {
 
     const ripple = getRippleNode(el);
     const size = RIPPLE_HALO_START_DIAMETER + 'px';
-    // ripples are positioned inside wrapper which sits at host rect.left/top.
-    // therefore set left/top relative to wrapper (client coords minus wrapper.left)
     const left = (p.x - RIPPLE_HALO_START_DIAMETER / 2) + 'px';
     const top = (p.y - RIPPLE_HALO_START_DIAMETER / 2) + 'px';
 
@@ -474,11 +338,7 @@ function onPointerDown(this: HTMLElement, e: any) {
       '--ripple-final-scale:' + haloFinalScale + ';' +
       'background:' + bg + ';transform:scale(1) translate3d(0,0,0);backface-visibility:hidden;box-shadow:' + boxShadow + ';';
 
-    // append to wrapper instead of host
-    const wrapper = createWrapperForHost(el);
-    wrapper.appendChild(ripple);
-
-    // keep active set mapping
+    el.appendChild(ripple);
     let setNow = activeRipples.get(el);
     if (!setNow) { setNow = new Set<HTMLElement>(); activeRipples.set(el, setNow); }
     setNow.add(ripple);
@@ -578,9 +438,7 @@ function onKeyDown(this: HTMLElement, e: KeyboardEvent) {
       '--ripple-duration:' + scaledDuration + 'ms;' +
       '--ripple-final-scale:' + haloFinalScale + ';' +
       'background:' + bg + ';transform:scale(1) translate3d(0,0,0);backface-visibility:hidden;box-shadow:' + boxShadow + ';';
-
-    const wrapper = createWrapperForHost(el);
-    wrapper.appendChild(ripple);
+    el.appendChild(ripple);
     let set = activeRipples.get(el);
     if (!set) { set = new Set<HTMLElement>(); activeRipples.set(el, set); }
     set.add(ripple);
@@ -636,8 +494,8 @@ let isRapidScrollFlag = false;
   document.addEventListener('touchcancel', onTouchEnd, { passive: true });
   window.addEventListener('scroll', onScroll, { passive: true });
 
-  // expose to onPointerDown (read-only-ish)
-  (onPointerDown as any)._isRapidScrollFlag = isRapidScrollFlag;
+  // provide a small helper for onPointerDown so it can read the live flag (no stale copy)
+  (onPointerDown as any)._use_isRapidScrollFlag_internal = function () { return isRapidScrollFlag; };
 })();
 
 function upgradeElement(el?: HTMLElement) {
