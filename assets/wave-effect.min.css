@@ -32,6 +32,24 @@
   }
 }
 
+/* Portal container (created/managed by JS) */
+.wave-portal {
+  position: fixed;
+  inset: 0;
+  pointer-events: none;
+  z-index: 2147483000;
+}
+
+/* Per-host wrapper inside portal that mimics host clip/shape */
+.ripple-portal-wrapper {
+  position: absolute;
+  overflow: hidden;
+  pointer-events: none;
+  will-change: left, top, width, height;
+  -webkit-tap-highlight-color: transparent;
+}
+
+/* ripple node visuals */
 .ripple {
   pointer-events: none;
   position: absolute;
