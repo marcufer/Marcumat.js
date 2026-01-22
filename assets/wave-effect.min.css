@@ -1,158 +1,135 @@
-/* Premium Material Ripple CSS
-   - core (fast bright center), halo (soft dark ambient), sheen (subtle highlight)
-   - compositor-friendly: only transform & opacity animated
-   - configurable via CSS variables
-*/
-
 [wave] {
   box-sizing: border-box;
   display: inline-block;
   position: relative;
   overflow: hidden;
   vertical-align: middle;
-  -webkit-tap-highlight-color: transparent;
-  tap-highlight-color: transparent;
-  z-index: 0;
 }
 
-/* Root tokens */
-:root{
-  --ripple-core-duration: 360ms;        /* core (bright) expansion */
-  --ripple-halo-duration: 520ms;        /* halo (soft ambient) expansion */
-  --ripple-fade-duration: 720ms;        /* fade out */
-  --ripple-easing-core: cubic-bezier(.0,.0,.2,1);
-  --ripple-easing-halo: cubic-bezier(.12,.9,.28,1);
-  --ripple-easing-fade: cubic-bezier(.4,0,.2,1);
-  --ripple-sheen-opacity: 0.66;
-  --ripple-core-initial-scale: 0.88;
-  --ripple-halo-scale-offset: 1.06;
-  --ripple-shadow-elev: 0 8px 32px rgba(20,24,40,0.10);
-  --ripple-shadow-soft: 0 2px 10px rgba(0,0,0,0.08);
-  --ripple-max-opacity: 0.98;
-  --ripple-min-opacity: 0.0;
+/* -------------------------
+   Global tuning (Material-like)
+------------------------- */
+:root {
+  --ripple-duration: 1800ms;
+  --ripple-fade-duration: 900ms;
+  
+  --ripple-easing: cubic-bezier(0.22, 0.61, 0.36, 1);
+  
+  --ripple-opacity: 0.28;
+  --ripple-highlight-opacity: 0.35;
+  
+  --ripple-shadow: 0 10px 28px rgba(8, 12, 20, 0.12);
+  --ripple-shadow-soft: 0 4px 16px rgba(8, 12, 20, 0.08);
 }
 
 /* Respect reduced motion */
 @media (prefers-reduced-motion: reduce) {
   :root {
-    --ripple-core-duration: 180ms;
-    --ripple-halo-duration: 200ms;
+    --ripple-duration: 240ms;
     --ripple-fade-duration: 160ms;
-    --ripple-easing-core: cubic-bezier(.4,0,1,1);
-    --ripple-easing-halo: cubic-bezier(.4,0,1,1);
-    --ripple-sheen-opacity: 0.35;
   }
 }
 
-/* Base ripple element
-   - uses CSS variables provided by JS for color and final scale
-   - ::before = halo (ambient shadow/soft)
-   - ::after  = sheen (highlight)
-*/
+/* -------------------------
+   Core Ripple
+------------------------- */
 .ripple {
   pointer-events: none;
   position: absolute;
   border-radius: 50%;
-  width: 18px;
-  height: 18px;
-  left: 0;
-  top: 0;
+  width: 20px;
+  height: 20px;
+  
+  background:
+    radial-gradient(circle at 30% 30%,
+      rgba(255, 255, 255, 0.18) 0%,
+      rgba(255, 255, 255, 0.06) 28%,
+      rgba(255, 255, 255, 0.02) 42%,
+      transparent 60%),
+    currentColor;
+  
+  opacity: var(--ripple-opacity);
+  transform: translate3d(0, 0, 0) scale(0.2);
   transform-origin: 50% 50%;
-  box-sizing: border-box;
-
-  /* visual base: core uses --ripple-bg (set by JS) or currentColor fallback */
-  background: var(--ripple-bg, radial-gradient(circle at 35% 35%, rgba(255,255,255,0.95) 0%, rgba(255,255,255,0.55) 12%, rgba(255,255,255,0.12) 26%, transparent 60%));
-  mix-blend-mode: screen;
-  opacity: var(--ripple-opacity, var(--ripple-max-opacity));
-  will-change: transform, opacity;
-  -webkit-backface-visibility: hidden;
-  backface-visibility: hidden;
-  transform: scale(var(--ripple-core-initial-scale, 0.88)) translate3d(0,0,0);
+  
+  box-shadow:
+    var(--ripple-shadow-soft),
+    inset 0 1px 2px rgba(255, 255, 255, 0.18);
+  
   transition:
-    transform var(--ripple-core-duration) var(--ripple-easing-core),
-    opacity var(--ripple-fade-duration) var(--ripple-easing-fade);
-  box-shadow: var(--ripple-shadow-soft);
-  z-index: 1;
+    transform var(--ripple-duration) var(--ripple-easing),
+    opacity var(--ripple-fade-duration) cubic-bezier(0.4, 0, 0.2, 1);
+  
+  will-change: transform, opacity;
+  backface-visibility: hidden;
+  -webkit-tap-highlight-color: transparent;
 }
 
-/* Halo: soft ambient outer layer */
+/* -------------------------
+   Specular highlight layer
+------------------------- */
 .ripple::before {
   content: "";
   position: absolute;
   inset: 0;
   border-radius: 50%;
   pointer-events: none;
-  background: radial-gradient(circle, rgba(16,20,28,0.12) 28%, rgba(16,20,28,0.06) 48%, transparent 75%);
-  transform: scale(calc(var(--ripple-core-initial-scale,0.88) * var(--ripple-halo-scale-offset,1.06)));
-  opacity: 0.9;
-  transition:
-    transform var(--ripple-halo-duration) var(--ripple-easing-halo),
-    opacity var(--ripple-fade-duration) var(--ripple-easing-fade);
-  will-change: transform, opacity;
-  z-index: 0;
-}
-
-/* Sheen: bright highlight on top for metallic/material feel */
-.ripple::after {
-  content: "";
-  position: absolute;
-  inset: 0;
-  border-radius: 50%;
-  pointer-events: none;
-  background: radial-gradient(ellipse at 60% 35%, rgba(255,255,255,0.95) 0%, rgba(255,255,255,0.40) 18%, rgba(255,255,255,0.06) 46%, transparent 72%);
-  opacity: var(--ripple-sheen-opacity, 0.66);
+  
+  background:
+    radial-gradient(circle at 35% 30%,
+      rgba(255, 255, 255, 0.55) 0%,
+      rgba(255, 255, 255, 0.25) 18%,
+      rgba(255, 255, 255, 0.10) 34%,
+      transparent 55%);
+  
+  opacity: var(--ripple-highlight-opacity);
   transform: scale(1);
+  
   transition:
-    transform calc(var(--ripple-halo-duration) * 0.98) var(--ripple-easing-halo),
-    opacity var(--ripple-fade-duration) var(--ripple-easing-fade);
-  z-index: 2;
+    transform var(--ripple-duration) var(--ripple-easing),
+    opacity var(--ripple-fade-duration) cubic-bezier(0.4, 0, 0.2, 1);
+  
+  will-change: transform, opacity;
 }
 
-/* Animating state: scale up core quickly, halo slightly larger + softer shadow */
+/* -------------------------
+   Animation states
+------------------------- */
 .ripple.animating {
-  transform: scale(var(--ripple-final-scale, 2.6)) translate3d(0,0,0);
-  opacity: var(--ripple-max-opacity);
-  box-shadow: var(--ripple-shadow-elev);
+  transform: translate3d(0, 0, 0) scale(var(--ripple-final-scale, 1));
+  opacity: var(--ripple-opacity);
+  
+  box-shadow:
+    var(--ripple-shadow),
+    inset 0 1px 3px rgba(255, 255, 255, 0.22);
 }
+
 .ripple.animating::before {
-  transform: scale(calc(var(--ripple-final-scale, 2.6) * var(--ripple-halo-scale-offset,1.06)));
-  opacity: 0.95;
-}
-.ripple.animating::after {
-  transform: scale(calc(var(--ripple-final-scale, 2.6) * 0.98));
-  opacity: calc(var(--ripple-sheen-opacity, 0.66) * 1);
+  transform: scale(calc(var(--ripple-final-scale, 1) * 1.08));
+  opacity: 1;
 }
 
-/* Fading: fade opacity to 0, reduce shadow to prevent expensive repaint loops */
 .ripple.fading {
-  opacity: var(--ripple-min-opacity);
-  box-shadow: 0 0 0 transparent;
-  transition: opacity var(--ripple-fade-duration) var(--ripple-easing-fade);
+  opacity: 0;
 }
-.ripple.fading::before,
-.ripple.fading::after { opacity: 0; transition: opacity var(--ripple-fade-duration) var(--ripple-easing-fade); }
 
-/* Performance tuning */
+.ripple.fading::before {
+  opacity: 0;
+}
+
+/* -------------------------
+   Performance tiers
+------------------------- */
 :root.wave-low-performance {
-  --ripple-sheen-opacity: 0.48;
-  --ripple-shadow-elev: 0 2px 8px rgba(12,12,12,0.06);
-  --ripple-halo-duration: 420ms;
-  --ripple-core-duration: 300ms;
+  --ripple-highlight-opacity: 0.2;
+  --ripple-shadow: 0 6px 16px rgba(8, 12, 20, 0.10);
+  --ripple-shadow-soft: 0 3px 10px rgba(8, 12, 20, 0.06);
 }
+
 :root.wave-medium-performance {
-  --ripple-sheen-opacity: 0.62;
-  --ripple-halo-duration: 480ms;
+  --ripple-highlight-opacity: 0.28;
 }
+
 :root.wave-high-performance {
-  --ripple-sheen-opacity: 0.76;
-  --ripple-halo-duration: 560ms;
+  --ripple-highlight-opacity: 0.38;
 }
-
-/* Ensure box-sizing inside pseudo elements */
-.ripple, .ripple::before, .ripple::after { box-sizing: border-box; }
-
-/* Utility: invisible & accessible (for a11y, ripples are purely decorative) */
-.ripple[aria-hidden="true"] { pointer-events: none; }
-
-/* Prevent mixing with other interactive layers */
-[wave][disabled], [wave][aria-disabled="true"] { pointer-events: none; }
