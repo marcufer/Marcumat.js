@@ -10,7 +10,7 @@
 }
 
 /* -------------------------
-   Global tuning (Heavy Material)
+   Global tuning (BRUTAL)
 ------------------------- */
 :root {
   --ripple-duration: 1800ms;
@@ -18,13 +18,13 @@
   
   --ripple-easing: cubic-bezier(0.22, 0.61, 0.36, 1);
   
-  /* 🔥 หนัก ชัด เห็นแน่นอน */
-  --ripple-opacity: 0.75;
-  --ripple-highlight-opacity: 0.85;
+  /* ☠️ โคตรหนัก */
+  --ripple-opacity: 0.95;
+  --ripple-highlight-opacity: 1;
   
-  /* 🔥 เงาเข้ม มีมิติจริง */
-  --ripple-shadow: 0 18px 46px rgba(8, 12, 20, 0.38);
-  --ripple-shadow-soft: 0 8px 26px rgba(8, 12, 20, 0.28);
+  /* ☠️ เงาเข้มลึก */
+  --ripple-shadow: 0 22px 60px rgba(8, 12, 20, 0.55);
+  --ripple-shadow-soft: 0 10px 34px rgba(8, 12, 20, 0.42);
 }
 
 /* Respect reduced motion */
@@ -42,26 +42,28 @@
   pointer-events: none;
   position: absolute;
   border-radius: 50%;
-  width: 22px;
-  height: 22px;
+  width: 24px;
+  height: 24px;
   
-  /* 🔥 พื้น ripple เข้มจัด */
+  /* ☠️ พื้น ripple ดำ-คม-แน่น */
   background:
-    radial-gradient(circle at 30% 30%,
-      rgba(255, 255, 255, 0.42) 0%,
-      rgba(255, 255, 255, 0.22) 22%,
-      rgba(255, 255, 255, 0.12) 40%,
-      rgba(255, 255, 255, 0.06) 52%,
-      transparent 68%),
+    radial-gradient(circle at 28% 28%,
+      rgba(255, 255, 255, 0.65) 0%,
+      rgba(255, 255, 255, 0.45) 16%,
+      rgba(255, 255, 255, 0.28) 32%,
+      rgba(255, 255, 255, 0.18) 46%,
+      rgba(255, 255, 255, 0.10) 58%,
+      rgba(255, 255, 255, 0.06) 66%,
+      transparent 78%),
     currentColor;
   
   opacity: var(--ripple-opacity);
-  transform: translate3d(0, 0, 0) scale(0.15);
+  transform: translate3d(0, 0, 0) scale(0.12);
   transform-origin: 50% 50%;
   
   box-shadow:
     var(--ripple-shadow-soft),
-    inset 0 2px 6px rgba(255, 255, 255, 0.38);
+    inset 0 3px 10px rgba(255, 255, 255, 0.55);
   
   transition:
     transform var(--ripple-duration) var(--ripple-easing),
@@ -82,14 +84,16 @@
   border-radius: 50%;
   pointer-events: none;
   
-  /* 🔥 ไฮไลต์แรงจริง */
+  /* ☠️ ไฮไลต์สะท้อนแรงมาก */
   background:
-    radial-gradient(circle at 35% 30%,
-      rgba(255, 255, 255, 0.95) 0%,
-      rgba(255, 255, 255, 0.65) 16%,
-      rgba(255, 255, 255, 0.38) 30%,
-      rgba(255, 255, 255, 0.18) 44%,
-      transparent 60%);
+    radial-gradient(circle at 32% 30%,
+      rgba(255, 255, 255, 1) 0%,
+      rgba(255, 255, 255, 0.85) 12%,
+      rgba(255, 255, 255, 0.65) 24%,
+      rgba(255, 255, 255, 0.42) 36%,
+      rgba(255, 255, 255, 0.24) 48%,
+      rgba(255, 255, 255, 0.14) 58%,
+      transparent 70%);
   
   opacity: var(--ripple-highlight-opacity);
   transform: scale(1);
@@ -108,14 +112,14 @@
   transform: translate3d(0, 0, 0) scale(var(--ripple-final-scale, 1));
   opacity: var(--ripple-opacity);
   
-  /* 🔥 depth หนัก */
+  /* ☠️ depth หนักสุด */
   box-shadow:
     var(--ripple-shadow),
-    inset 0 2px 8px rgba(255, 255, 255, 0.42);
+    inset 0 3px 14px rgba(255, 255, 255, 0.65);
 }
 
 .ripple.animating::before {
-  transform: scale(calc(var(--ripple-final-scale, 1) * 1.12));
+  transform: scale(calc(var(--ripple-final-scale, 1) * 1.15));
   opacity: 1;
 }
 
@@ -136,18 +140,18 @@
    Performance tiers
 ------------------------- */
 :root.wave-low-performance {
-  --ripple-opacity: 0.6;
-  --ripple-highlight-opacity: 0.7;
-  --ripple-shadow: 0 14px 36px rgba(8, 12, 20, 0.30);
-  --ripple-shadow-soft: 0 6px 20px rgba(8, 12, 20, 0.22);
+  --ripple-opacity: 0.8;
+  --ripple-highlight-opacity: 0.9;
+  --ripple-shadow: 0 18px 46px rgba(8, 12, 20, 0.45);
+  --ripple-shadow-soft: 0 8px 28px rgba(8, 12, 20, 0.36);
 }
 
 :root.wave-medium-performance {
-  --ripple-opacity: 0.75;
-  --ripple-highlight-opacity: 0.85;
+  --ripple-opacity: 0.95;
+  --ripple-highlight-opacity: 1;
 }
 
 :root.wave-high-performance {
-  --ripple-opacity: 0.88;
-  --ripple-highlight-opacity: 0.95;
+  --ripple-opacity: 1;
+  --ripple-highlight-opacity: 1;
 }
