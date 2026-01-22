@@ -1,14 +1,10 @@
 ///////////////////////////////////////////////////////////////////////////////
-// wave-effect (TypeScript) — adjusted to align with updated CSS
-// Changes summary:
-// - Stop writing box-shadow and transform inline; rely on the stylesheet to handle
-//   compositor-friendly transforms and shadows.
-// - Only write CSS custom properties needed by the stylesheet: --ripple-duration,
-//   --ripple-final-scale and --ripple-fade-duration (when fading).
-// - Keep public API and behavior the same; small visual/effect changes possible
-//   because the CSS now owns more of the animation parameters.
-// - Preserve pooling, delegation, keyboard support, performance-tiering, and
-//   rapid-scroll suppression logic.
+// wave-effect (TypeScript) — enhanced hex color support
+// - Normalize and accept 6-digit hex colors (with or without '#') and 3-digit shorthand
+// - Produce robust gradients for hex colors: prefer rgba(...) fallback for compatibility,
+//   and also support 8-digit hex if provided/needed.
+// - Preserve prior behavior for rgb/rgba/hsl/hsla function colors and other color inputs.
+// - All other behavior (pooling, delegation, keyboard, perf tiers, rapid-scroll) unchanged.
 // -----------------------------------------------------------------------------
 ///////////////////////////////////////////////////////////////////////////////
 
@@ -43,9 +39,7 @@ const sqrt2 = Math.SQRT2 || Math.sqrt(2);
 const _tpl: HTMLElement = (() => {
   const s = document.createElement('span');
   s.className = RIPPLE_CLASS + ' dynamic-halo-pro';
-  // keep it hidden by default — JS will set display:block when used
   s.style.display = 'none';
-  // ensure the element doesn't accidentally capture events
   s.setAttribute('aria-hidden', 'true');
   return s;
 })();
@@ -106,6 +100,32 @@ function getElData(el: HTMLElement): ElData {
   return d;
 }
 
+/* Utility: normalize hex color inputs
+   - Accepts "#RRGGBB", "RRGGBB", "#RGB", "RGB" (case-insensitive)
+   - Returns "#rrggbb" (lowercase) or null if not a valid hex color
+*/
+function normalizeHexColor(input?: string | null): string | null {
+  if (!input) return null;
+  let s = input.trim().toLowerCase();
+  if (s.startsWith('#')) s = s.slice(1);
+  // Only hex digits allowed
+  if (!/^[0-9a-f]{3}$/.test(s) && !/^[0-9a-f]{6}$/.test(s)) return null;
+  if (s.length === 3) {
+    // expand shorthand (#abc -> #aabbcc)
+    s = s.split('').map(ch => ch + ch).join('');
+  }
+  return '#' + s;
+}
+
+/* Utility: convert hex "#rrggbb" to {r,g,b} numbers 0-255 */
+function hexToRgb(hex: string): { r: number; g: number; b: number } {
+  const h = hex.replace('#', '');
+  const r = parseInt(h.substring(0, 2), 16);
+  const g = parseInt(h.substring(2, 4), 16);
+  const b = parseInt(h.substring(4, 6), 16);
+  return { r, g, b };
+}
+
 function computeGradient(color?: Maybe<string>): string {
   if (!color) return DEFAULT_GRADIENT;
   const d = now();
@@ -114,22 +134,49 @@ function computeGradient(color?: Maybe<string>): string {
   const entry = gm.get(color);
   const localTTL = PERF_LEVEL === 'low' ? GRADIENT_TTL * 4 : GRADIENT_TTL;
   if (entry && (d - entry.t) < localTTL) return entry.v;
-  const cleaned = (color || '').replace(/\s+/g, '');
-  const m = reFuncColor.exec(cleaned);
-  let out: string;
-  if (m) {
-    const parts = m[2].split(',');
+
+  // Clean whitespace
+  const cleaned = (color || '').trim();
+
+  // If it's a functional color (rgb/rgba/hsl/hsla) use the existing logic
+  const mFunc = reFuncColor.exec(cleaned.replace(/\s+/g, ''));
+  if (mFunc) {
+    const parts = mFunc[2].split(',');
     const alpha = (parts[3] !== undefined) ? parseFloat(parts[3]) : 1;
     const rippleAlpha = Math.min(1, Math.max(alpha, 0.15));
-    const prefix = m[1].startsWith('hsl') ? 'hsla' : 'rgba';
+    const prefix = mFunc[1].startsWith('hsl') ? 'hsla' : 'rgba';
     const core = parts.slice(0, 3).join(',');
-    out = 'radial-gradient(circle, ' + prefix + '(' + core + ',' + rippleAlpha + ') 10%, transparent 80%)';
-  } else {
-    // append a small alpha suffix if the color is a hex or keyword so the ripple is visible
-    out = 'radial-gradient(circle, ' + color + '26 10%, transparent 80%)';
+    const out = 'radial-gradient(circle, ' + prefix + '(' + core + ',' + rippleAlpha + ') 10%, transparent 80%)';
+    gm.set(color, { v: out, t: d });
+    return out;
   }
-  gm.set(color, { v: out, t: d });
-  return out;
+
+  // Try hex normalisation (supports 3 or 6 digit, with or without '#')
+  const normalizedHex = normalizeHexColor(cleaned);
+  if (normalizedHex) {
+    // Compute an accessible alpha value similar to previous implementation (~0.15)
+    const alpha = 0.15;
+    const { r, g, b } = hexToRgb(normalizedHex);
+    // Use rgba(...) first for maximum compatibility, then let CSS accept hex8 if desired.
+    const rgba = `rgba(${r}, ${g}, ${b}, ${alpha})`;
+    const out = `radial-gradient(circle, ${rgba} 10%, transparent 80%)`;
+    gm.set(color, { v: out, t: d });
+    return out;
+  }
+
+  // Fallback: attempt to append alpha hex if input looked like a 6-digit hex with trailing non-alpha removed
+  // previous behaviour appended '26' to the color (hex 0x26 ~= 0.15). Support that if string starts with '#'
+  if (/^#?[0-9a-f]{6}$/i.test(cleaned)) {
+    const hex8 = (cleaned.startsWith('#') ? cleaned : '#' + cleaned) + '26';
+    const out = 'radial-gradient(circle, ' + hex8 + ' 10%, transparent 80%)';
+    gm.set(color, { v: out, t: d });
+    return out;
+  }
+
+  // Last fallback: let CSS try to interpret the color, but provide a translucent default if that fails visually
+  const fallback = 'radial-gradient(circle, ' + cleaned + ' 10%, transparent 80%)';
+  gm.set(color, { v: fallback, t: d });
+  return fallback;
 }
 
 function getRippleNode(el: HTMLElement): HTMLElement {
@@ -138,20 +185,16 @@ function getRippleNode(el: HTMLElement): HTMLElement {
   let node = pool.pop();
   if (!node) node = _tpl.cloneNode(false) as HTMLElement;
   node.classList.remove('animating', 'fading');
-  // ensure it's visible when used (template uses display:none)
   node.style.display = 'block';
-  // clear per-ripple custom properties (but avoid clearing all cssText to minimize churn)
   node.style.removeProperty('--ripple-final-scale');
   node.style.removeProperty('--ripple-duration');
   node.style.removeProperty('--ripple-fade-duration');
-  // keep other CSS controlled by stylesheet
   return node;
 }
 
 function releaseRippleNode(el: HTMLElement, node: HTMLElement) {
   node.classList.remove('animating', 'fading');
   try { node.style.opacity = '0'; } catch (e) { /* ignore */ }
-  // let CSS handle will-change and other performance properties
   try { if (node.parentNode === el) el.removeChild(node); } catch (e) { /* ignore */ }
   const d = getElData(el);
   if (!d.pool) d.pool = [];
@@ -161,7 +204,6 @@ function releaseRippleNode(el: HTMLElement, node: HTMLElement) {
 function fadeOutAndRemoveRipple(ripple: HTMLElement | undefined | null, el: HTMLElement) {
   if (!ripple) return;
   const duration = RIPPLE_FADE_DURATION;
-  // tell CSS how long fade should take
   ripple.style.setProperty('--ripple-fade-duration', duration + 'ms');
   ripple.classList.add('fading');
   let removed = false;
@@ -176,7 +218,6 @@ function fadeOutAndRemoveRipple(ripple: HTMLElement | undefined | null, el: HTML
     }
   }
   ripple.addEventListener('transitionend', onEnd as EventListener);
-  // fallback removal in case transitionend doesn't fire
   setTimeout(onEnd, duration + 220);
 }
 
@@ -290,23 +331,18 @@ function findWaveDelegateEl(originEl: EventTarget | null, event: any): boolean {
 }
 
 function animateRipple(node: HTMLElement, scale: number, duration: number) {
-  // Align with CSS: do not write transform or box-shadow inline.
-  // Only update the CSS custom properties the stylesheet uses.
   try {
     node.style.setProperty('--ripple-final-scale', String(scale));
     node.style.setProperty('--ripple-duration', Math.max(120, Math.round(duration)) + 'ms');
   } catch (e) { /* ignore */ }
-  // The rest (transform, will-change, transitions) are managed by CSS.
 }
 
 function onPointerDown(this: HTMLElement, e: any) {
   if (e.button && e.button !== 0) return;
   const el = this;
   if (!el) return;
-  // read dynamic flag directly (do NOT rely on a stale property copy)
   if ((typeof (globalThis as any) !== 'undefined' && (globalThis as any).__wave_ignore_events__) ) return;
 
-  // Use the module-level isRapidScrollFlag (declared below in installTouchHandlers)
   if ((onPointerDown as any)._use_isRapidScrollFlag_internal && (onPointerDown as any)._use_isRapidScrollFlag_internal()) {
     return;
   }
@@ -340,7 +376,6 @@ function onPointerDown(this: HTMLElement, e: any) {
     const left = (p.x - RIPPLE_HALO_START_DIAMETER / 2) + 'px';
     const top = (p.y - RIPPLE_HALO_START_DIAMETER / 2) + 'px';
 
-    // Give the stylesheet control over shadows and depth; only set geometry + background + vars.
     ripple.style.left = left;
     ripple.style.top = top;
     ripple.style.width = size;
@@ -350,7 +385,6 @@ function onPointerDown(this: HTMLElement, e: any) {
     ripple.style.position = 'absolute';
     ripple.style.borderRadius = '50%';
     ripple.style.pointerEvents = 'none';
-    // set animation vars used by CSS
     ripple.style.setProperty('--ripple-duration', scaledDuration + 'ms');
     ripple.style.setProperty('--ripple-final-scale', String(haloFinalScale));
 
@@ -382,13 +416,9 @@ function onPointerDown(this: HTMLElement, e: any) {
     el.addEventListener('touchend', endRipple, { passive: true, once: true });
     el.addEventListener('touchcancel', endRipple, { passive: true, once: true });
 
-    // Trigger animation by adding the animating class on the next frame.
     requestAnimationFrame(function () {
-      // ensure the element's custom properties are observed before adding the class
-      // reading offsetWidth forces layout and helps the transition start reliably
       try { void ripple.offsetWidth; } catch (e) {}
       ripple.classList.add('animating');
-      // inform CSS via vars (also call animateRipple for parity)
       animateRipple(ripple, haloFinalScale, scaledDuration);
       setTimeout(function () {
         if (!expansionEnded) {
@@ -468,7 +498,6 @@ function onKeyDown(this: HTMLElement, e: KeyboardEvent) {
     if (!set) { set = new Set<HTMLElement>(); activeRipples.set(el, set); }
     set.add(ripple);
     requestAnimationFrame(function () {
-      // ensure layout is observed
       try { void ripple.offsetWidth; } catch (e) {}
       ripple.classList.add('animating');
       animateRipple(ripple, haloFinalScale, scaledDuration);
@@ -521,7 +550,6 @@ let isRapidScrollFlag = false;
   document.addEventListener('touchcancel', onTouchEnd, { passive: true });
   window.addEventListener('scroll', onScroll, { passive: true });
 
-  // provide a small helper for onPointerDown so it can read the live flag (no stale copy)
   (onPointerDown as any)._use_isRapidScrollFlag_internal = function () { return isRapidScrollFlag; };
 })();
 
@@ -652,7 +680,7 @@ const WaveEffect = {
   settings: {}
 };
 
-// Attach to global if available (simulate UMD default)
+// Attach to global if available
 declare const globalThis: any;
 if (typeof window !== 'undefined') {
   (window as any).WaveEffect = WaveEffect;
