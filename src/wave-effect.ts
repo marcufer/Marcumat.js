@@ -1,9 +1,8 @@
 ///////////////////////////////////////////////////////////////////////////////
-// wave-effect (TypeScript) — patched for more robust compositor-only animations
-// - Reduce repaint/reflow sources (no box-shadow transitions, stable will-change in CSS)
-// - Fix stale rapid-scroll flag exposure bug
-// - Avoid toggling will-change from JS (leave to CSS)
-//
+// wave-effect (TypeScript) — premium material ripple adjustments
+// - sets CSS variables for multi-layer premium ripple (core + halo + sheen)
+// - only updates transform/opacity from JS to stay compositor-friendly
+// - keeps pooling and performance detection from original
 ///////////////////////////////////////////////////////////////////////////////
 
 type Maybe<T> = T | null | undefined;
@@ -11,15 +10,14 @@ type Maybe<T> = T | null | undefined;
 interface ElData {
   pool: HTMLElement[];
   color?: string | null;
-  gradient?: string | undefined;
   rect?: DOMRect | undefined;
   _colorStamp?: number;
 }
 
 const RIPPLE_CLASS = 'ripple';
 const SURFACE_CLASS = 'ripple-surface';
-const BASE_DURATION = 2500;
-let RIPPLE_FADE_DURATION = 800;
+const BASE_DURATION = 520; // baseline used to derive core/halo durations (ms)
+let RIPPLE_FADE_DURATION = 720;
 const RIPPLE_HALO_START_DIAMETER = 18;
 const COVERAGE_EXPAND_RATIO = 1.8;
 const MAX_RIPPLES_PER_ELEMENT = 2;
@@ -27,7 +25,7 @@ const MAX_RIPPLES_PER_ELEMENT = 2;
 const elData: WeakMap<HTMLElement, ElData> = new WeakMap();
 const activeRipples: WeakMap<HTMLElement, Set<HTMLElement>> = new WeakMap();
 const GRADIENT_TTL = 20000;
-const DEFAULT_GRADIENT = 'radial-gradient(circle, rgba(16, 20, 28, 0.2) 0%, transparent 80%)';
+const DEFAULT_GRADIENT = 'radial-gradient(circle, rgba(16, 20, 28, 0.16) 0%, transparent 80%)';
 const reWaveColor = /(?:^|\s)c\s*[=:]?\s*([#a-zA-Z0-9(),.\s]+)/i;
 const reFuncColor = /^(rgba?|hsla?)\(([^)]+)\)$/i;
 const now = (): number => (typeof performance !== 'undefined' && (performance as any).now) ? (performance as any).now() : Date.now();
@@ -37,6 +35,7 @@ const sqrt2 = Math.SQRT2 || Math.sqrt(2);
 const _tpl: HTMLElement = (() => {
   const s = document.createElement('span');
   s.className = RIPPLE_CLASS + ' dynamic-halo-pro';
+  s.setAttribute('aria-hidden', 'true');
   s.style.display = 'none';
   return s;
 })();
@@ -111,12 +110,13 @@ function computeGradient(color?: Maybe<string>): string {
   if (m) {
     const parts = m[2].split(',');
     const alpha = (parts[3] !== undefined) ? parseFloat(parts[3]) : 1;
-    const rippleAlpha = Math.min(1, Math.max(alpha, 0.15));
+    const rippleAlpha = Math.min(1, Math.max(alpha, 0.14));
     const prefix = m[1].startsWith('hsl') ? 'hsla' : 'rgba';
     const core = parts.slice(0, 3).join(',');
-    out = 'radial-gradient(circle, ' + prefix + '(' + core + ',' + rippleAlpha + ') 10%, transparent 80%)';
+    out = 'radial-gradient(circle at 35% 35%, ' + prefix + '(' + core + ',' + Math.min(rippleAlpha*1.2,1) + ') 0%, transparent 55%)';
   } else {
-    out = 'radial-gradient(circle, ' + color + '26 10%, transparent 80%)';
+    // fall back: append 26 hex-ish alpha for subtle core
+    out = 'radial-gradient(circle at 35% 35%, ' + color + '26 0%, transparent 55%)';
   }
   gm.set(color, { v: out, t: d });
   return out;
@@ -128,14 +128,14 @@ function getRippleNode(el: HTMLElement): HTMLElement {
   let node = pool.pop();
   if (!node) node = _tpl.cloneNode(false) as HTMLElement;
   node.classList.remove('animating', 'fading');
-  // do not fully clear cssText (avoid unnecessary style churn); we'll overwrite what's needed below
+  node.style.cssText = ''; // clear inline-only properties; we'll set needed vars later
+  node.style.display = 'block';
   return node;
 }
 
 function releaseRippleNode(el: HTMLElement, node: HTMLElement) {
   node.classList.remove('animating', 'fading');
   try { node.style.opacity = '0'; } catch (e) { /* ignore */ }
-  // avoid toggling will-change from JS — CSS handles it
   try { if (node.parentNode === el) el.removeChild(node); } catch (e) { /* ignore */ }
   const d = getElData(el);
   if (!d.pool) d.pool = [];
@@ -147,14 +147,12 @@ function fadeOutAndRemoveRipple(ripple: HTMLElement | undefined | null, el: HTML
   const duration = RIPPLE_FADE_DURATION;
   ripple.classList.add('fading');
   ripple.style.setProperty('--ripple-fade-duration', duration + 'ms');
-  // avoid setting will-change here; CSS already declares it
   let removed = false;
   function onEnd(e?: TransitionEvent) {
     if (removed) return;
     if (!e || e.propertyName === 'opacity') {
       removed = true;
       ripple.removeEventListener('transitionend', onEnd as EventListener);
-      // avoid toggling will-change here
       const set = activeRipples.get(el);
       if (set && set.delete) set.delete(ripple);
       releaseRippleNode(el, ripple);
@@ -273,29 +271,19 @@ function findWaveDelegateEl(originEl: EventTarget | null, event: any): boolean {
   return false;
 }
 
-function animateRipple(node: HTMLElement, scale: number, duration: number) {
-  // rely on CSS will-change (set in stylesheet) to promote to compositor; only write transform
+function animateRipple(node: HTMLElement, scale: number) {
+  // only write transform to stay on the compositor
   node.style.transform = 'translate3d(0,0,0) scale(' + scale + ')';
-  try { (node.style as any).backfaceVisibility = 'hidden'; } catch (e) {}
-  // avoid touching will-change here; removal not needed
-  const removeAfter = Math.max(120, duration + 60);
-  setTimeout(() => {
-    // nothing to remove — keep will-change controlled by CSS
-  }, removeAfter);
+  // JS does not toggle will-change; CSS handles it
+  // Nothing to cleanup here — CSS transitions end themselves
 }
 
 function onPointerDown(this: HTMLElement, e: any) {
   if (e.button && e.button !== 0) return;
   const el = this;
   if (!el) return;
-  // read dynamic flag directly (do NOT rely on a stale property copy)
   if ((typeof (globalThis as any) !== 'undefined' && (globalThis as any).__wave_ignore_events__) ) return;
-  if ((<any>window).isRapidScrollFlag) {
-    // older integrations might expose, but prefer module-level var; fallback below
-  }
-  if ((<any>window).navigator && false) {} // noop to avoid TS warning
 
-  // Use the module-level isRapidScrollFlag (declared below in installTouchHandlers)
   if ((onPointerDown as any)._use_isRapidScrollFlag_internal && (onPointerDown as any)._use_isRapidScrollFlag_internal()) {
     return;
   }
@@ -308,7 +296,12 @@ function onPointerDown(this: HTMLElement, e: any) {
     p = computePointerLocal(el, pointer);
   }
 
-  const scaledDuration = Math.max(120, Math.round(BASE_DURATION));
+  // Derived durations
+  const coreDuration = Math.max(120, Math.round(BASE_DURATION * 0.68)); // faster core
+  const haloDuration = Math.max(coreDuration + 120, Math.round(BASE_DURATION)); // halo slightly slower
+  const scaledDuration = Math.max(coreDuration, 120);
+  const fadeDuration = RIPPLE_FADE_DURATION;
+
   const radius = maximalExpandedCoverageRadius(p.x, p.y, p.w, p.h);
   const haloFinalScale = (radius * 2) / RIPPLE_HALO_START_DIAMETER;
   const colorVal = getRippleColor(el);
@@ -329,19 +322,29 @@ function onPointerDown(this: HTMLElement, e: any) {
     const left = (p.x - RIPPLE_HALO_START_DIAMETER / 2) + 'px';
     const top = (p.y - RIPPLE_HALO_START_DIAMETER / 2) + 'px';
 
-    const boxShadow = (PERF_LEVEL === 'low') ? '0 3px 8px rgba(8,12,20,0.03)' : '0 4px 12px rgba(8, 12, 20, 0.04)';
-
-    ripple.style.cssText =
-      'display:block;position:absolute;border-radius:50%;pointer-events:none;' +
-      'width:' + size + ';height:' + size + ';left:' + left + ';top:' + top + ';' +
-      '--ripple-duration:' + scaledDuration + 'ms;' +
-      '--ripple-final-scale:' + haloFinalScale + ';' +
-      'background:' + bg + ';transform:scale(1) translate3d(0,0,0);backface-visibility:hidden;box-shadow:' + boxShadow + ';';
+    // set CSS variables used by the CSS to coordinate core/halo/sheen timing
+    try {
+      ripple.style.setProperty('--ripple-duration', scaledDuration + 'ms');
+      ripple.style.setProperty('--ripple-core-duration', coreDuration + 'ms');
+      ripple.style.setProperty('--ripple-halo-duration', haloDuration + 'ms');
+      ripple.style.setProperty('--ripple-fade-duration', fadeDuration + 'ms');
+      ripple.style.setProperty('--ripple-final-scale', String(haloFinalScale));
+      ripple.style.setProperty('--ripple-bg', bg);
+      ripple.style.setProperty('--ripple-sheen-opacity', (PERF_LEVEL === 'low' ? '0.5' : '0.66'));
+      ripple.style.left = left;
+      ripple.style.top = top;
+      ripple.style.width = size;
+      ripple.style.height = size;
+      ripple.style.position = 'absolute';
+      ripple.style.pointerEvents = 'none';
+      ripple.setAttribute('aria-hidden', 'true');
+    } catch (e) { /* ignore style setter errors on older browsers */ }
 
     el.appendChild(ripple);
     let setNow = activeRipples.get(el);
     if (!setNow) { setNow = new Set<HTMLElement>(); activeRipples.set(el, setNow); }
     setNow.add(ripple);
+
     let expansionEnded = false;
     function onTransformEnd(evt?: TransitionEvent) {
       if (evt && evt.propertyName !== 'transform') return;
@@ -349,6 +352,7 @@ function onPointerDown(this: HTMLElement, e: any) {
       ripple.removeEventListener('transitionend', onTransformEnd as EventListener);
     }
     ripple.addEventListener('transitionend', onTransformEnd as EventListener);
+
     function endRipple() {
       if (!ripple.parentNode) return;
       fadeOutAndRemoveRipple(ripple, el);
@@ -368,13 +372,15 @@ function onPointerDown(this: HTMLElement, e: any) {
 
     requestAnimationFrame(function () {
       ripple.classList.add('animating');
-      animateRipple(ripple, haloFinalScale, scaledDuration);
+      // animate by writing transform (compositor-only)
+      animateRipple(ripple, haloFinalScale);
+      // safety fallback: ensure we mark expansion ended after expected duration
       setTimeout(function () {
         if (!expansionEnded) {
           expansionEnded = true;
           try { ripple.removeEventListener('transitionend', onTransformEnd as EventListener); } catch (e) { /* ignore */ }
         }
-      }, scaledDuration + 220);
+      }, Math.max(120, haloDuration + 220));
     });
   });
 }
@@ -422,7 +428,8 @@ function onKeyDown(this: HTMLElement, e: KeyboardEvent) {
     const x = rect.width / 2, y = rect.height / 2;
     const radius = maximalExpandedCoverageRadius(x, y, rect.width, rect.height);
     const haloFinalScale = (radius * 2) / RIPPLE_HALO_START_DIAMETER;
-    const scaledDuration = Math.max(120, Math.round(BASE_DURATION));
+    const coreDuration = Math.max(120, Math.round(BASE_DURATION * 0.68));
+    const haloDuration = Math.max(coreDuration + 120, Math.round(BASE_DURATION));
     const colorVal = getRippleColor(el);
     const bg = computeGradient(colorVal);
     const ripple = getRippleNode(el);
@@ -430,26 +437,31 @@ function onKeyDown(this: HTMLElement, e: KeyboardEvent) {
     const left = (rect.width / 2 - RIPPLE_HALO_START_DIAMETER / 2) + 'px';
     const top = (rect.height / 2 - RIPPLE_HALO_START_DIAMETER / 2) + 'px';
 
-    const boxShadow = (PERF_LEVEL === 'low') ? '0 3px 8px rgba(8,12,20,0.03)' : '0 4px 12px rgba(8, 12, 20, 0.04)';
+    try {
+      ripple.style.setProperty('--ripple-core-duration', coreDuration + 'ms');
+      ripple.style.setProperty('--ripple-halo-duration', haloDuration + 'ms');
+      ripple.style.setProperty('--ripple-fade-duration', RIPPLE_FADE_DURATION + 'ms');
+      ripple.style.setProperty('--ripple-final-scale', String(haloFinalScale));
+      ripple.style.setProperty('--ripple-bg', bg);
+      ripple.style.left = left;
+      ripple.style.top = top;
+      ripple.style.width = size;
+      ripple.style.height = size;
+      ripple.setAttribute('aria-hidden', 'true');
+    } catch (e) {}
 
-    ripple.style.cssText =
-      'display:block;position:absolute;border-radius:50%;pointer-events:none;' +
-      'width:' + size + ';height:' + size + ';left:' + left + ';top:' + top + ';' +
-      '--ripple-duration:' + scaledDuration + 'ms;' +
-      '--ripple-final-scale:' + haloFinalScale + ';' +
-      'background:' + bg + ';transform:scale(1) translate3d(0,0,0);backface-visibility:hidden;box-shadow:' + boxShadow + ';';
     el.appendChild(ripple);
     let set = activeRipples.get(el);
     if (!set) { set = new Set<HTMLElement>(); activeRipples.set(el, set); }
     set.add(ripple);
     requestAnimationFrame(function () {
       ripple.classList.add('animating');
-      animateRipple(ripple, haloFinalScale, scaledDuration);
+      animateRipple(ripple, haloFinalScale);
     });
     setTimeout(function () {
       fadeOutAndRemoveRipple(ripple, el);
       try { if (set && set.delete) set.delete(ripple); } catch (e) { /* ignore */ }
-    }, Math.max(120, scaledDuration - 120));
+    }, Math.max(120, Math.round(haloDuration - 120)));
   });
 }
 
@@ -494,7 +506,6 @@ let isRapidScrollFlag = false;
   document.addEventListener('touchcancel', onTouchEnd, { passive: true });
   window.addEventListener('scroll', onScroll, { passive: true });
 
-  // provide a small helper for onPointerDown so it can read the live flag (no stale copy)
   (onPointerDown as any)._use_isRapidScrollFlag_internal = function () { return isRapidScrollFlag; };
 })();
 
