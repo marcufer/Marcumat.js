@@ -7,27 +7,26 @@
 }
 
 :root {
-  --ripple-duration: 2400ms;
-  --ripple-fade-duration: 900ms;
+  --ripple-duration: 2600ms;
+  --ripple-fade-duration: 950ms;
   
-  /* organic expansion */
-  --ripple-easing: cubic-bezier(0.14, 0.72, 0.22, 1);
+  /* Fluid material easing */
+  --ripple-easing: cubic-bezier(0.18, 0.75, 0.25, 1);
   
-  /* sheen tuning */
-  --ripple-sheen-opacity: 0.85;
-  
-  /* glow tuning */
-  --ripple-glow-opacity: 0.25;
+  /* Light tuning */
+  --ripple-sheen-opacity: 0.9;
+  --ripple-glow-opacity: 0.28;
+  --ripple-edge-softness: 0.55;
 }
 
-/* Respect reduced motion */
 @media (prefers-reduced-motion: reduce) {
   :root {
-    --ripple-fade-duration: 120ms;
-    --ripple-duration: 220ms;
+    --ripple-duration: 240ms;
+    --ripple-fade-duration: 140ms;
   }
 }
 
+/* Core ripple */
 .ripple {
   pointer-events: none;
   position: absolute;
@@ -35,22 +34,30 @@
   width: 18px;
   height: 18px;
   
-  /* Premium layered fill */
+  /* Multi-layer material fill */
   background:
-    radial-gradient(circle at 30% 30%,
-      rgba(255, 255, 255, 0.18) 0%,
-      rgba(255, 255, 255, 0.08) 22%,
-      transparent 45%),
+    radial-gradient(circle at 35% 30%,
+      rgba(255, 255, 255, 0.35) 0%,
+      rgba(255, 255, 255, 0.18) 18%,
+      rgba(255, 255, 255, 0.08) 30%,
+      transparent 52%),
     radial-gradient(circle at center,
-      rgba(255, 255, 255, 0.12) 0%,
-      rgba(255, 255, 255, 0.06) 35%,
+      rgba(255, 255, 255, 0.16) 0%,
+      rgba(255, 255, 255, 0.08) 34%,
+      rgba(255, 255, 255, 0.02) 48%,
       transparent 65%),
+    radial-gradient(circle at center,
+      rgba(0, 0, 0, 0.08) 0%,
+      rgba(0, 0, 0, 0.04) 28%,
+      transparent 55%),
     currentColor;
   
-  /* Soft depth shadow */
+  /* Material depth */
   box-shadow:
-    0 6px 14px rgba(8, 12, 20, 0.06),
-    inset 0 0 0.5px rgba(255, 255, 255, 0.25);
+    0 10px 24px rgba(8, 12, 20, 0.08),
+    0 3px 8px rgba(8, 12, 20, 0.06),
+    inset 0 1px 1px rgba(255, 255, 255, 0.35),
+    inset 0 -1px 1px rgba(0, 0, 0, 0.12);
   
   opacity: 1;
   transform: scale(1) translate3d(0, 0, 0);
@@ -61,13 +68,12 @@
     opacity var(--ripple-fade-duration) cubic-bezier(0.4, 0, 0.2, 1);
   
   will-change: transform, opacity;
-  -webkit-backface-visibility: hidden;
   backface-visibility: hidden;
   -webkit-tap-highlight-color: transparent;
   transform: translate3d(0, 0, 0) scale(1);
 }
 
-/* Glass-like sheen */
+/* Fresnel highlight layer */
 .ripple::before {
   content: "";
   position: absolute;
@@ -76,11 +82,11 @@
   pointer-events: none;
   
   background:
-    radial-gradient(circle at 35% 30%,
-      rgba(255, 255, 255, 0.25) 0%,
-      rgba(255, 255, 255, 0.12) 22%,
-      rgba(255, 255, 255, 0.04) 38%,
-      transparent 60%);
+    radial-gradient(circle at 38% 28%,
+      rgba(255, 255, 255, 0.45) 0%,
+      rgba(255, 255, 255, 0.22) 20%,
+      rgba(255, 255, 255, 0.08) 34%,
+      transparent 58%);
   
   opacity: var(--ripple-sheen-opacity);
   transform: scale(1);
@@ -92,23 +98,23 @@
   will-change: transform, opacity;
 }
 
-/* Outer glow ring */
+/* Outer diffusion glow */
 .ripple::after {
   content: "";
   position: absolute;
-  inset: -8%;
+  inset: -14%;
   border-radius: 50%;
   pointer-events: none;
   
   background:
     radial-gradient(circle at center,
-      rgba(255, 255, 255, 0.35) 0%,
-      rgba(255, 255, 255, 0.18) 25%,
-      rgba(255, 255, 255, 0.06) 45%,
-      transparent 70%);
+      rgba(255, 255, 255, 0.42) 0%,
+      rgba(255, 255, 255, 0.20) 22%,
+      rgba(255, 255, 255, 0.08) 42%,
+      transparent 72%);
   
   opacity: var(--ripple-glow-opacity);
-  transform: scale(0.9);
+  transform: scale(0.92);
   
   transition:
     transform var(--ripple-duration) var(--ripple-easing),
@@ -117,18 +123,38 @@
   will-change: transform, opacity;
 }
 
+/* Soft edge mask (Material-style) */
+.ripple-mask {
+  position: absolute;
+  inset: 0;
+  border-radius: 50%;
+  pointer-events: none;
+  
+  background:
+    radial-gradient(circle at center,
+      rgba(0, 0, 0, 1) 0%,
+      rgba(0, 0, 0, 1) 55%,
+      rgba(0, 0, 0, var(--ripple-edge-softness)) 70%,
+      rgba(0, 0, 0, 0.15) 82%,
+      transparent 100%);
+  
+  mix-blend-mode: multiply;
+  opacity: 0.15;
+}
+
+/* Animation states */
 .ripple.animating {
   transform: scale(var(--ripple-final-scale, 1)) translate3d(0, 0, 0);
 }
 
 .ripple.animating::before {
-  transform: scale(calc(var(--ripple-final-scale, 1) * 1.05));
+  transform: scale(calc(var(--ripple-final-scale, 1) * 1.06));
   opacity: 1;
 }
 
 .ripple.animating::after {
-  transform: scale(calc(var(--ripple-final-scale, 1) * 1.08));
-  opacity: calc(var(--ripple-glow-opacity) + 0.05);
+  transform: scale(calc(var(--ripple-final-scale, 1) * 1.12));
+  opacity: calc(var(--ripple-glow-opacity) + 0.06);
 }
 
 .ripple.fading {
@@ -148,16 +174,19 @@
 
 /* Performance tiers */
 :root.wave-low-performance {
-  --ripple-sheen-opacity: 0.6;
-  --ripple-glow-opacity: 0.15;
+  --ripple-sheen-opacity: 0.65;
+  --ripple-glow-opacity: 0.14;
+  --ripple-edge-softness: 0.35;
 }
 
 :root.wave-medium-performance {
-  --ripple-sheen-opacity: 0.75;
+  --ripple-sheen-opacity: 0.78;
   --ripple-glow-opacity: 0.22;
+  --ripple-edge-softness: 0.45;
 }
 
 :root.wave-high-performance {
-  --ripple-sheen-opacity: 0.9;
-  --ripple-glow-opacity: 0.32;
+  --ripple-sheen-opacity: 0.95;
+  --ripple-glow-opacity: 0.34;
+  --ripple-edge-softness: 0.6;
 }
