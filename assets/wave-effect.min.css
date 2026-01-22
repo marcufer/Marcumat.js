@@ -6,29 +6,23 @@
   vertical-align: middle;
 }
 
-/* Simplified timings:
-   - Two timing variables remain:
-     --ripple-duration: transform/expansion duration
-     --ripple-fade-duration: opacity fade duration
-   - Blur removed; contain usage reduced to avoid layer/paint glitches.
-*/
-
-:root{
-  --ripple-duration: 2500ms;
-  --ripple-fade-duration: 800ms;
-
-  /* gentle ease for expansion */
-  --ripple-easing: cubic-bezier(0.12, 0.75, 0.24, 1);
-
-  /* sheen tuning */
-  --ripple-sheen-opacity: 0.82;
+:root {
+  --ripple-duration: 2600ms;
+  --ripple-fade-duration: 950ms;
+  
+  /* Material-like organic motion */
+  --ripple-easing: cubic-bezier(0.16, 0.78, 0.28, 1);
+  
+  --ripple-sheen-opacity: 0.92;
+  --ripple-glow-opacity: 0.34;
+  --ripple-ring-opacity: 0.45;
 }
 
-/* Respect user's reduced motion preference */
+/* Respect reduced motion */
 @media (prefers-reduced-motion: reduce) {
   :root {
-    --ripple-fade-duration: 120ms;
-    --ripple-duration: 220ms;
+    --ripple-fade-duration: 140ms;
+    --ripple-duration: 240ms;
   }
 }
 
@@ -38,88 +32,139 @@
   border-radius: 50%;
   width: 18px;
   height: 18px;
-  background-color: currentColor;
-
-  /* No filter/blur used */
-  filter: none;
-
-  /* Lighter shadow to reduce paint cost (static, NOT transitioned) */
-  box-shadow: 0 4px 12px rgba(8, 12, 20, 0.04);
-
+  
+  /* Liquid material base */
+  background:
+    radial-gradient(circle at 30% 28%,
+      rgba(255, 255, 255, 0.30) 0%,
+      rgba(255, 255, 255, 0.16) 20%,
+      rgba(255, 255, 255, 0.06) 38%,
+      transparent 60%),
+    radial-gradient(circle at center,
+      rgba(255, 255, 255, 0.18) 0%,
+      rgba(255, 255, 255, 0.10) 32%,
+      rgba(255, 255, 255, 0.05) 52%,
+      transparent 75%),
+    currentColor;
+  
+  /* Soft depth */
+  box-shadow:
+    0 10px 24px rgba(8, 12, 20, 0.10),
+    0 2px 6px rgba(8, 12, 20, 0.05),
+    inset 0 0 0.75px rgba(255, 255, 255, 0.35);
+  
   opacity: 1;
-  transform: scale(1) translate3d(0,0,0);
+  transform: scale(0.92) translate3d(0, 0, 0);
   transform-origin: 50% 50%;
-
-  /* Only animate compositor-friendly properties */
+  
   transition:
     transform var(--ripple-duration) var(--ripple-easing),
     opacity var(--ripple-fade-duration) cubic-bezier(0.4, 0, 0.2, 1);
-
-  /* keep will-change stable via CSS so the compositor can prepare layers */
+  
   will-change: transform, opacity;
   -webkit-backface-visibility: hidden;
   backface-visibility: hidden;
   -webkit-tap-highlight-color: transparent;
-  /* push to its own layer aggressively */
-  transform: translate3d(0,0,0) scale(1);
 }
 
-/* Subtle sheen */
+/* Glass highlight */
 .ripple::before {
   content: "";
   position: absolute;
   inset: 0;
   border-radius: 50%;
   pointer-events: none;
-  background: radial-gradient(circle at 40% 35%, rgba(255,255,255,0.08) 0%, rgba(255,255,255,0.02) 28%, transparent 58%);
-  opacity: var(--ripple-sheen-opacity, 0.82);
+  
+  background:
+    radial-gradient(circle at 35% 30%,
+      rgba(255, 255, 255, 0.45) 0%,
+      rgba(255, 255, 255, 0.22) 18%,
+      rgba(255, 255, 255, 0.10) 32%,
+      rgba(255, 255, 255, 0.04) 46%,
+      transparent 65%);
+  
+  opacity: var(--ripple-sheen-opacity);
   transform: scale(1);
+  
   transition:
     transform var(--ripple-duration) var(--ripple-easing),
     opacity var(--ripple-fade-duration) cubic-bezier(0.4, 0, 0.2, 1);
+  
   will-change: transform, opacity;
 }
 
-.ripple.animating,
-.ripple.fading {
-  /* keep will-change static (handled by base .ripple), avoid changing box-shadow here */
+/* Energy ring (Material pulse) */
+.ripple::after {
+  content: "";
+  position: absolute;
+  inset: -10%;
+  border-radius: 50%;
+  pointer-events: none;
+  
+  background:
+    radial-gradient(circle at center,
+      rgba(255, 255, 255, 0.55) 0%,
+      rgba(255, 255, 255, 0.38) 18%,
+      rgba(255, 255, 255, 0.22) 30%,
+      rgba(255, 255, 255, 0.10) 42%,
+      rgba(255, 255, 255, 0.05) 52%,
+      transparent 72%);
+  
+  opacity: var(--ripple-glow-opacity);
+  transform: scale(0.86);
+  
+  transition:
+    transform var(--ripple-duration) var(--ripple-easing),
+    opacity var(--ripple-fade-duration) cubic-bezier(0.4, 0, 0.2, 1);
+  
+  will-change: transform, opacity;
 }
 
-/* Animating uses transform-only updates (compositor) */
 .ripple.animating {
-  transform: scale(var(--ripple-final-scale, 1)) translate3d(0,0,0);
-  filter: none;
+  transform: scale(var(--ripple-final-scale, 1)) translate3d(0, 0, 0);
 }
+
+/* Subtle overshoot like Material 3 */
 .ripple.animating::before {
-  transform: scale(calc(var(--ripple-final-scale, 1) * 1.04));
+  transform: scale(calc(var(--ripple-final-scale, 1) * 1.07));
   opacity: 1;
 }
 
+.ripple.animating::after {
+  transform: scale(calc(var(--ripple-final-scale, 1) * 1.12));
+  opacity: calc(var(--ripple-glow-opacity) + 0.06);
+}
+
 .ripple.fading {
   opacity: 0;
-  filter: none;
 }
-.ripple.fading::before {
+
+.ripple.fading::before,
+.ripple.fading::after {
   opacity: 0;
 }
 
-.ripple, .ripple::before { box-sizing: border-box; }
+.ripple,
+.ripple::before,
+.ripple::after {
+  box-sizing: border-box;
+}
 
-/* Performance-specific tuning (shadow/pool only) */
+/* Performance tiers */
 :root.wave-low-performance {
-  --ripple-sheen-opacity: 0.6;
-  --ripple-shadow: 0 3px 8px rgba(8,12,20,0.03);
+  --ripple-sheen-opacity: 0.65;
+  --ripple-glow-opacity: 0.18;
+  --ripple-ring-opacity: 0.25;
 }
 
 :root.wave-medium-performance {
-  --ripple-sheen-opacity: 0.72;
+  --ripple-sheen-opacity: 0.82;
+  --ripple-glow-opacity: 0.28;
+  --ripple-ring-opacity: 0.38;
 }
 
 :root.wave-high-performance {
-  --ripple-sheen-opacity: 0.86;
-}
-
-.wave-low-performance .ripple.animating,
-.wave-low-performance .ripple.fading {
-  box-shadow: 0 3px 8px rgba(8,12,20,0.03);
+  --ripple-sheen-opacity: 0.96;
+  --ripple-glow-opacity: 0.38;
+  --ripple-ring-opacity: 0.48;
 }
