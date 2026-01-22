@@ -1,8 +1,9 @@
 ///////////////////////////////////////////////////////////////////////////////
-// wave-effect (TypeScript) — patched for more robust compositor-only animations
-// - Reduce repaint/reflow sources (no box-shadow transitions, stable will-change in CSS)
-// - Fix stale rapid-scroll flag exposure bug
-// - Avoid toggling will-change from JS (leave to CSS)
+// wave-effect (TypeScript) — aligned with updated CSS (compositor-first/vars)
+// - Reduce inline style churn: only write minimal layout and CSS custom properties
+// - Avoid toggling will-change or box-shadow from JS (CSS controls those)
+// - Read sensible default durations from CSS when available
+// - Preserve public API and behavior; minor visual/effect tuning allowed
 //
 ///////////////////////////////////////////////////////////////////////////////
 
@@ -36,7 +37,8 @@ const sqrt2 = Math.SQRT2 || Math.sqrt(2);
 // template node used for cloning
 const _tpl: HTMLElement = (() => {
   const s = document.createElement('span');
-  s.className = RIPPLE_CLASS + ' dynamic-halo-pro';
+  s.className = RIPPLE_CLASS;
+  s.setAttribute('aria-hidden', 'true');
   s.style.display = 'none';
   return s;
 })();
@@ -129,6 +131,7 @@ function getRippleNode(el: HTMLElement): HTMLElement {
   if (!node) node = _tpl.cloneNode(false) as HTMLElement;
   node.classList.remove('animating', 'fading');
   // do not fully clear cssText (avoid unnecessary style churn); we'll overwrite what's needed below
+  node.style.display = 'none';
   return node;
 }
 
@@ -142,11 +145,29 @@ function releaseRippleNode(el: HTMLElement, node: HTMLElement) {
   if (d.pool.length < getMaxRipples()) d.pool.push(node);
 }
 
+function parseCssMs(raw: string | null | undefined, fallback: number) {
+  if (!raw) return fallback;
+  const m = raw.trim().match(/^([0-9.]+)(ms|s)?$/);
+  if (!m) return fallback;
+  const v = parseFloat(m[1]);
+  if (m[2] === 's') return Math.round(v * 1000);
+  return Math.round(v);
+}
+
+function getCssRippleDuration(): number {
+  try {
+    if (typeof window === 'undefined' || !document || !document.documentElement) return BASE_DURATION;
+    const cs = getComputedStyle(document.documentElement);
+    const raw = cs.getPropertyValue('--ripple-duration');
+    return parseCssMs(raw, BASE_DURATION);
+  } catch (e) { return BASE_DURATION; }
+}
+
 function fadeOutAndRemoveRipple(ripple: HTMLElement | undefined | null, el: HTMLElement) {
   if (!ripple) return;
   const duration = RIPPLE_FADE_DURATION;
   ripple.classList.add('fading');
-  ripple.style.setProperty('--ripple-fade-duration', duration + 'ms');
+  try { ripple.style.setProperty('--ripple-fade-duration', duration + 'ms'); } catch (e) { /* ignore */ }
   // avoid setting will-change here; CSS already declares it
   let removed = false;
   function onEnd(e?: TransitionEvent) {
@@ -275,12 +296,12 @@ function findWaveDelegateEl(originEl: EventTarget | null, event: any): boolean {
 
 function animateRipple(node: HTMLElement, scale: number, duration: number) {
   // rely on CSS will-change (set in stylesheet) to promote to compositor; only write transform
-  node.style.transform = 'translate3d(0,0,0) scale(' + scale + ')';
+  try { node.style.transform = 'translate3d(0,0,0) scale(' + scale + ')'; } catch (e) { /* ignore */ }
   try { (node.style as any).backfaceVisibility = 'hidden'; } catch (e) {}
   // avoid touching will-change here; removal not needed
   const removeAfter = Math.max(120, duration + 60);
   setTimeout(() => {
-    // nothing to remove — keep will-change controlled by CSS
+    // nothing to remove — CSS controls promotion
   }, removeAfter);
 }
 
@@ -290,10 +311,6 @@ function onPointerDown(this: HTMLElement, e: any) {
   if (!el) return;
   // read dynamic flag directly (do NOT rely on a stale property copy)
   if ((typeof (globalThis as any) !== 'undefined' && (globalThis as any).__wave_ignore_events__) ) return;
-  if ((<any>window).isRapidScrollFlag) {
-    // older integrations might expose, but prefer module-level var; fallback below
-  }
-  if ((<any>window).navigator && false) {} // noop to avoid TS warning
 
   // Use the module-level isRapidScrollFlag (declared below in installTouchHandlers)
   if ((onPointerDown as any)._use_isRapidScrollFlag_internal && (onPointerDown as any)._use_isRapidScrollFlag_internal()) {
@@ -308,7 +325,9 @@ function onPointerDown(this: HTMLElement, e: any) {
     p = computePointerLocal(el, pointer);
   }
 
-  const scaledDuration = Math.max(120, Math.round(BASE_DURATION));
+  // Prefer CSS-specified duration, fallback to BASE_DURATION
+  const cssDur = getCssRippleDuration();
+  const scaledDuration = Math.max(120, Math.round(cssDur || BASE_DURATION));
   const radius = maximalExpandedCoverageRadius(p.x, p.y, p.w, p.h);
   const haloFinalScale = (radius * 2) / RIPPLE_HALO_START_DIAMETER;
   const colorVal = getRippleColor(el);
@@ -329,14 +348,20 @@ function onPointerDown(this: HTMLElement, e: any) {
     const left = (p.x - RIPPLE_HALO_START_DIAMETER / 2) + 'px';
     const top = (p.y - RIPPLE_HALO_START_DIAMETER / 2) + 'px';
 
-    const boxShadow = (PERF_LEVEL === 'low') ? '0 3px 8px rgba(8,12,20,0.03)' : '0 4px 12px rgba(8, 12, 20, 0.04)';
+    // Minimize inline style writes: only assign layout + CSS custom properties + computed background
+    ripple.style.display = 'block';
+    ripple.style.width = size;
+    ripple.style.height = size;
+    ripple.style.left = left;
+    ripple.style.top = top;
+    // set the duration and final scale via CSS variables so transitions are driven by stylesheet
+    try { ripple.style.setProperty('--ripple-duration', scaledDuration + 'ms'); } catch (e) {}
+    try { ripple.style.setProperty('--ripple-final-scale', String(haloFinalScale)); } catch (e) {}
+    // background computed (gradient) is set here (keeps ripple color responsive)
+    try { ripple.style.background = bg; } catch (e) {}
 
-    ripple.style.cssText =
-      'display:block;position:absolute;border-radius:50%;pointer-events:none;' +
-      'width:' + size + ';height:' + size + ';left:' + left + ';top:' + top + ';' +
-      '--ripple-duration:' + scaledDuration + 'ms;' +
-      '--ripple-final-scale:' + haloFinalScale + ';' +
-      'background:' + bg + ';transform:scale(1) translate3d(0,0,0);backface-visibility:hidden;box-shadow:' + boxShadow + ';';
+    // ensure starting transform is identity (CSS handles will-change)
+    try { ripple.style.transform = 'translate3d(0,0,0) scale(1)'; } catch (e) {}
 
     el.appendChild(ripple);
     let setNow = activeRipples.get(el);
@@ -422,7 +447,7 @@ function onKeyDown(this: HTMLElement, e: KeyboardEvent) {
     const x = rect.width / 2, y = rect.height / 2;
     const radius = maximalExpandedCoverageRadius(x, y, rect.width, rect.height);
     const haloFinalScale = (radius * 2) / RIPPLE_HALO_START_DIAMETER;
-    const scaledDuration = Math.max(120, Math.round(BASE_DURATION));
+    const scaledDuration = Math.max(120, Math.round(getCssRippleDuration()));
     const colorVal = getRippleColor(el);
     const bg = computeGradient(colorVal);
     const ripple = getRippleNode(el);
@@ -430,14 +455,16 @@ function onKeyDown(this: HTMLElement, e: KeyboardEvent) {
     const left = (rect.width / 2 - RIPPLE_HALO_START_DIAMETER / 2) + 'px';
     const top = (rect.height / 2 - RIPPLE_HALO_START_DIAMETER / 2) + 'px';
 
-    const boxShadow = (PERF_LEVEL === 'low') ? '0 3px 8px rgba(8,12,20,0.03)' : '0 4px 12px rgba(8, 12, 20, 0.04)';
+    ripple.style.display = 'block';
+    ripple.style.width = size;
+    ripple.style.height = size;
+    ripple.style.left = left;
+    ripple.style.top = top;
+    try { ripple.style.setProperty('--ripple-duration', scaledDuration + 'ms'); } catch (e) {}
+    try { ripple.style.setProperty('--ripple-final-scale', String(haloFinalScale)); } catch (e) {}
+    try { ripple.style.background = bg; } catch (e) {}
+    try { ripple.style.transform = 'translate3d(0,0,0) scale(1)'; } catch (e) {}
 
-    ripple.style.cssText =
-      'display:block;position:absolute;border-radius:50%;pointer-events:none;' +
-      'width:' + size + ';height:' + size + ';left:' + left + ';top:' + top + ';' +
-      '--ripple-duration:' + scaledDuration + 'ms;' +
-      '--ripple-final-scale:' + haloFinalScale + ';' +
-      'background:' + bg + ';transform:scale(1) translate3d(0,0,0);backface-visibility:hidden;box-shadow:' + boxShadow + ';';
     el.appendChild(ripple);
     let set = activeRipples.get(el);
     if (!set) { set = new Set<HTMLElement>(); activeRipples.set(el, set); }
@@ -614,7 +641,7 @@ const config = {
   BASE_DURATION,
   get RIPPLE_FADE_DURATION() { return RIPPLE_FADE_DURATION; },
   setFadeDuration(ms: number) { if (typeof ms === 'number' && ms > 50 && ms < 5000) RIPPLE_FADE_DURATION = ms | 0; },
-  setRippleDuration(ms: number) { /* placeholder */ }
+  setRippleDuration(ms: number) { /* placeholder: CSS prefers controlling this via custom properties */ }
 };
 
 const WaveEffect = {
