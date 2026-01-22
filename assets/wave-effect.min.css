@@ -10,7 +10,7 @@
 }
 
 /* -------------------------
-   Global tuning (Dark Default)
+   Global tuning (Dark Ink)
 ------------------------- */
 :root {
   --ripple-duration: 1800ms;
@@ -18,15 +18,16 @@
   
   --ripple-easing: cubic-bezier(0.22, 0.61, 0.36, 1);
   
-  /* 🖤 โทนมืดเป็นค่าเริ่มต้น */
-  --ripple-color: rgba(0, 0, 0, 0.88);
+  /* 🖤 มืดล้วน ไม่มีขาวผสม */
+  --ripple-color-core: rgba(0, 0, 0, 0.92);
+  --ripple-color-mid: rgba(0, 0, 0, 0.65);
+  --ripple-color-edge: rgba(0, 0, 0, 0.35);
   
   --ripple-opacity: 1;
-  --ripple-highlight-opacity: 0.9;
   
-  /* 🖤 เงาเข้ม มีมิติ */
-  --ripple-shadow: 0 22px 60px rgba(0, 0, 0, 0.45);
-  --ripple-shadow-soft: 0 10px 34px rgba(0, 0, 0, 0.32);
+  /* 🖤 เงามืดล้วน */
+  --ripple-shadow: 0 22px 60px rgba(0, 0, 0, 0.48);
+  --ripple-shadow-soft: 0 10px 34px rgba(0, 0, 0, 0.34);
 }
 
 /* Respect reduced motion */
@@ -47,24 +48,22 @@
   width: 24px;
   height: 24px;
   
-  /* 🖤 Dark ink surface + highlight */
+  /* 🖤 Ink ripple โทนมืดล้วน */
   background:
-    radial-gradient(circle at 30% 30%,
-      rgba(255, 255, 255, 0.55) 0%,
-      rgba(255, 255, 255, 0.32) 18%,
-      rgba(255, 255, 255, 0.18) 34%,
-      rgba(255, 255, 255, 0.10) 48%,
-      rgba(255, 255, 255, 0.05) 58%,
-      transparent 72%),
-    var(--ripple-color);
+    radial-gradient(circle at 50% 50%,
+      var(--ripple-color-core) 0%,
+      var(--ripple-color-mid) 42%,
+      var(--ripple-color-edge) 62%,
+      rgba(0, 0, 0, 0.15) 78%,
+      rgba(0, 0, 0, 0.05) 92%,
+      transparent 100%);
   
   opacity: var(--ripple-opacity);
   transform: translate3d(0, 0, 0) scale(0.12);
   transform-origin: 50% 50%;
   
   box-shadow:
-    var(--ripple-shadow-soft),
-    inset 0 3px 10px rgba(255, 255, 255, 0.55);
+    var(--ripple-shadow-soft);
   
   transition:
     transform var(--ripple-duration) var(--ripple-easing),
@@ -76,7 +75,7 @@
 }
 
 /* -------------------------
-   Specular highlight layer
+   Subtle depth ring (no white)
 ------------------------- */
 .ripple::before {
   content: "";
@@ -85,17 +84,16 @@
   border-radius: 50%;
   pointer-events: none;
   
-  /* 🖤 ไฮไลต์ขาวบนผิวมืด */
+  /* 🖤 วงมืดซ้อน เพิ่มมิติ */
   background:
-    radial-gradient(circle at 35% 30%,
-      rgba(255, 255, 255, 1) 0%,
-      rgba(255, 255, 255, 0.78) 14%,
-      rgba(255, 255, 255, 0.52) 28%,
-      rgba(255, 255, 255, 0.32) 42%,
-      rgba(255, 255, 255, 0.18) 54%,
-      transparent 66%);
+    radial-gradient(circle at 50% 50%,
+      rgba(0, 0, 0, 0.55) 0%,
+      rgba(0, 0, 0, 0.35) 28%,
+      rgba(0, 0, 0, 0.18) 48%,
+      rgba(0, 0, 0, 0.08) 66%,
+      transparent 82%);
   
-  opacity: var(--ripple-highlight-opacity);
+  opacity: 0.9;
   transform: scale(1);
   
   transition:
@@ -114,12 +112,11 @@
   
   /* 🖤 depth หนัก */
   box-shadow:
-    var(--ripple-shadow),
-    inset 0 3px 12px rgba(255, 255, 255, 0.65);
+    var(--ripple-shadow);
 }
 
 .ripple.animating::before {
-  transform: scale(calc(var(--ripple-final-scale, 1) * 1.15));
+  transform: scale(calc(var(--ripple-final-scale, 1) * 1.12));
   opacity: 1;
 }
 
@@ -140,18 +137,22 @@
    Performance tiers
 ------------------------- */
 :root.wave-low-performance {
-  --ripple-opacity: 0.9;
-  --ripple-highlight-opacity: 0.75;
-  --ripple-shadow: 0 18px 52px rgba(0, 0, 0, 0.40);
+  --ripple-color-core: rgba(0, 0, 0, 0.88);
+  --ripple-color-mid: rgba(0, 0, 0, 0.58);
+  --ripple-color-edge: rgba(0, 0, 0, 0.28);
+  
+  --ripple-shadow: 0 18px 52px rgba(0, 0, 0, 0.42);
   --ripple-shadow-soft: 0 8px 28px rgba(0, 0, 0, 0.30);
 }
 
 :root.wave-medium-performance {
-  --ripple-opacity: 1;
-  --ripple-highlight-opacity: 0.9;
+  --ripple-color-core: rgba(0, 0, 0, 0.92);
+  --ripple-color-mid: rgba(0, 0, 0, 0.65);
+  --ripple-color-edge: rgba(0, 0, 0, 0.35);
 }
 
 :root.wave-high-performance {
-  --ripple-opacity: 1;
-  --ripple-highlight-opacity: 1;
+  --ripple-color-core: rgba(0, 0, 0, 0.96);
+  --ripple-color-mid: rgba(0, 0, 0, 0.72);
+  --ripple-color-edge: rgba(0, 0, 0, 0.42);
 }
