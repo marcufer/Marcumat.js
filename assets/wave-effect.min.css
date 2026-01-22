@@ -1,3 +1,6 @@
+/* -------------------------
+   Wave container
+------------------------- */
 [wave] {
   box-sizing: border-box;
   display: inline-block;
@@ -7,7 +10,7 @@
 }
 
 /* -------------------------
-   Global tuning (Material-like)
+   Global tuning (Material-like, Darkened)
 ------------------------- */
 :root {
   --ripple-duration: 1800ms;
@@ -15,11 +18,13 @@
   
   --ripple-easing: cubic-bezier(0.22, 0.61, 0.36, 1);
   
-  --ripple-opacity: 0.28;
-  --ripple-highlight-opacity: 0.35;
+  /* 🔴 Visibility tuning */
+  --ripple-opacity: 0.45;
+  --ripple-highlight-opacity: 0.55;
   
-  --ripple-shadow: 0 10px 28px rgba(8, 12, 20, 0.12);
-  --ripple-shadow-soft: 0 4px 16px rgba(8, 12, 20, 0.08);
+  /* 🔴 Depth + contrast */
+  --ripple-shadow: 0 14px 36px rgba(8, 12, 20, 0.22);
+  --ripple-shadow-soft: 0 6px 20px rgba(8, 12, 20, 0.14);
 }
 
 /* Respect reduced motion */
@@ -40,21 +45,22 @@
   width: 20px;
   height: 20px;
   
+  /* 🔴 Material surface + sheen */
   background:
     radial-gradient(circle at 30% 30%,
-      rgba(255, 255, 255, 0.18) 0%,
-      rgba(255, 255, 255, 0.06) 28%,
-      rgba(255, 255, 255, 0.02) 42%,
-      transparent 60%),
+      rgba(255, 255, 255, 0.30) 0%,
+      rgba(255, 255, 255, 0.14) 24%,
+      rgba(255, 255, 255, 0.06) 42%,
+      transparent 62%),
     currentColor;
   
   opacity: var(--ripple-opacity);
-  transform: translate3d(0, 0, 0) scale(0.2);
+  transform: translate3d(0, 0, 0) scale(0.18);
   transform-origin: 50% 50%;
   
   box-shadow:
     var(--ripple-shadow-soft),
-    inset 0 1px 2px rgba(255, 255, 255, 0.18);
+    inset 0 1px 3px rgba(255, 255, 255, 0.28);
   
   transition:
     transform var(--ripple-duration) var(--ripple-easing),
@@ -77,9 +83,9 @@
   
   background:
     radial-gradient(circle at 35% 30%,
-      rgba(255, 255, 255, 0.55) 0%,
-      rgba(255, 255, 255, 0.25) 18%,
-      rgba(255, 255, 255, 0.10) 34%,
+      rgba(255, 255, 255, 0.75) 0%,
+      rgba(255, 255, 255, 0.40) 18%,
+      rgba(255, 255, 255, 0.16) 34%,
       transparent 55%);
   
   opacity: var(--ripple-highlight-opacity);
@@ -101,11 +107,11 @@
   
   box-shadow:
     var(--ripple-shadow),
-    inset 0 1px 3px rgba(255, 255, 255, 0.22);
+    inset 0 1px 4px rgba(255, 255, 255, 0.32);
 }
 
 .ripple.animating::before {
-  transform: scale(calc(var(--ripple-final-scale, 1) * 1.08));
+  transform: scale(calc(var(--ripple-final-scale, 1) * 1.1));
   opacity: 1;
 }
 
@@ -117,19 +123,27 @@
   opacity: 0;
 }
 
+.ripple,
+.ripple::before {
+  box-sizing: border-box;
+}
+
 /* -------------------------
    Performance tiers
 ------------------------- */
 :root.wave-low-performance {
-  --ripple-highlight-opacity: 0.2;
-  --ripple-shadow: 0 6px 16px rgba(8, 12, 20, 0.10);
-  --ripple-shadow-soft: 0 3px 10px rgba(8, 12, 20, 0.06);
+  --ripple-opacity: 0.38;
+  --ripple-highlight-opacity: 0.45;
+  --ripple-shadow: 0 10px 24px rgba(8, 12, 20, 0.18);
+  --ripple-shadow-soft: 0 4px 14px rgba(8, 12, 20, 0.10);
 }
 
 :root.wave-medium-performance {
-  --ripple-highlight-opacity: 0.28;
+  --ripple-opacity: 0.45;
+  --ripple-highlight-opacity: 0.55;
 }
 
 :root.wave-high-performance {
-  --ripple-highlight-opacity: 0.38;
+  --ripple-opacity: 0.55;
+  --ripple-highlight-opacity: 0.68;
 }
