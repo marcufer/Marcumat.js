@@ -1,8 +1,8 @@
 ///////////////////////////////////////////////////////////////////////////////
-// wave-effect (TypeScript) — patched for more robust compositor-only animations
-// - Reduce repaint/reflow sources (no box-shadow transitions, stable will-change in CSS)
-// - Fix stale rapid-scroll flag exposure bug
-// - Avoid toggling will-change from JS (leave to CSS)
+// wave-effect (TypeScript) — patched for premium material-like ripple layers
+// - Add inner "core" burst layer via ::after and pass CSS vars from JS
+// - Keep animations compositor-only (transform/opacity)
+// - No will-change toggling from JS (leave to stylesheet)
 //
 ///////////////////////////////////////////////////////////////////////////////
 
@@ -128,14 +128,12 @@ function getRippleNode(el: HTMLElement): HTMLElement {
   let node = pool.pop();
   if (!node) node = _tpl.cloneNode(false) as HTMLElement;
   node.classList.remove('animating', 'fading');
-  // do not fully clear cssText (avoid unnecessary style churn); we'll overwrite what's needed below
   return node;
 }
 
 function releaseRippleNode(el: HTMLElement, node: HTMLElement) {
   node.classList.remove('animating', 'fading');
   try { node.style.opacity = '0'; } catch (e) { /* ignore */ }
-  // avoid toggling will-change from JS — CSS handles it
   try { if (node.parentNode === el) el.removeChild(node); } catch (e) { /* ignore */ }
   const d = getElData(el);
   if (!d.pool) d.pool = [];
@@ -147,14 +145,12 @@ function fadeOutAndRemoveRipple(ripple: HTMLElement | undefined | null, el: HTML
   const duration = RIPPLE_FADE_DURATION;
   ripple.classList.add('fading');
   ripple.style.setProperty('--ripple-fade-duration', duration + 'ms');
-  // avoid setting will-change here; CSS already declares it
   let removed = false;
   function onEnd(e?: TransitionEvent) {
     if (removed) return;
     if (!e || e.propertyName === 'opacity') {
       removed = true;
       ripple.removeEventListener('transitionend', onEnd as EventListener);
-      // avoid toggling will-change here
       const set = activeRipples.get(el);
       if (set && set.delete) set.delete(ripple);
       releaseRippleNode(el, ripple);
@@ -277,7 +273,6 @@ function animateRipple(node: HTMLElement, scale: number, duration: number) {
   // rely on CSS will-change (set in stylesheet) to promote to compositor; only write transform
   node.style.transform = 'translate3d(0,0,0) scale(' + scale + ')';
   try { (node.style as any).backfaceVisibility = 'hidden'; } catch (e) {}
-  // avoid touching will-change here; removal not needed
   const removeAfter = Math.max(120, duration + 60);
   setTimeout(() => {
     // nothing to remove — keep will-change controlled by CSS
@@ -288,14 +283,8 @@ function onPointerDown(this: HTMLElement, e: any) {
   if (e.button && e.button !== 0) return;
   const el = this;
   if (!el) return;
-  // read dynamic flag directly (do NOT rely on a stale property copy)
   if ((typeof (globalThis as any) !== 'undefined' && (globalThis as any).__wave_ignore_events__) ) return;
-  if ((<any>window).isRapidScrollFlag) {
-    // older integrations might expose, but prefer module-level var; fallback below
-  }
-  if ((<any>window).navigator && false) {} // noop to avoid TS warning
 
-  // Use the module-level isRapidScrollFlag (declared below in installTouchHandlers)
   if ((onPointerDown as any)._use_isRapidScrollFlag_internal && (onPointerDown as any)._use_isRapidScrollFlag_internal()) {
     return;
   }
@@ -311,6 +300,12 @@ function onPointerDown(this: HTMLElement, e: any) {
   const scaledDuration = Math.max(120, Math.round(BASE_DURATION));
   const radius = maximalExpandedCoverageRadius(p.x, p.y, p.w, p.h);
   const haloFinalScale = (radius * 2) / RIPPLE_HALO_START_DIAMETER;
+
+  // compute a smaller, faster "core" scale for inner burst (gives premium punch)
+  const coreFinalScale = Math.min(1.6, Math.max(1.15, haloFinalScale * 0.18 + 1.0));
+  const coreDuration = 420;
+  const coreFade = 320;
+
   const colorVal = getRippleColor(el);
   const bg = computeGradient(colorVal);
 
@@ -331,11 +326,16 @@ function onPointerDown(this: HTMLElement, e: any) {
 
     const boxShadow = (PERF_LEVEL === 'low') ? '0 3px 8px rgba(8,12,20,0.03)' : '0 4px 12px rgba(8, 12, 20, 0.04)';
 
+    // Pass additional CSS variables for core + durations (keeps JS -> CSS styling only)
     ripple.style.cssText =
       'display:block;position:absolute;border-radius:50%;pointer-events:none;' +
       'width:' + size + ';height:' + size + ';left:' + left + ';top:' + top + ';' +
       '--ripple-duration:' + scaledDuration + 'ms;' +
       '--ripple-final-scale:' + haloFinalScale + ';' +
+      '--ripple-core-final-scale:' + coreFinalScale + ';' +
+      '--ripple-core-duration:' + coreDuration + 'ms;' +
+      '--ripple-core-fade-duration:' + coreFade + 'ms;' +
+      '--ripple-fade-duration:' + RIPPLE_FADE_DURATION + 'ms;' +
       'background:' + bg + ';transform:scale(1) translate3d(0,0,0);backface-visibility:hidden;box-shadow:' + boxShadow + ';';
 
     el.appendChild(ripple);
@@ -422,7 +422,12 @@ function onKeyDown(this: HTMLElement, e: KeyboardEvent) {
     const x = rect.width / 2, y = rect.height / 2;
     const radius = maximalExpandedCoverageRadius(x, y, rect.width, rect.height);
     const haloFinalScale = (radius * 2) / RIPPLE_HALO_START_DIAMETER;
+
+    const coreFinalScale = Math.min(1.6, Math.max(1.15, haloFinalScale * 0.18 + 1.0));
     const scaledDuration = Math.max(120, Math.round(BASE_DURATION));
+    const coreDuration = 420;
+    const coreFade = 320;
+
     const colorVal = getRippleColor(el);
     const bg = computeGradient(colorVal);
     const ripple = getRippleNode(el);
@@ -437,6 +442,10 @@ function onKeyDown(this: HTMLElement, e: KeyboardEvent) {
       'width:' + size + ';height:' + size + ';left:' + left + ';top:' + top + ';' +
       '--ripple-duration:' + scaledDuration + 'ms;' +
       '--ripple-final-scale:' + haloFinalScale + ';' +
+      '--ripple-core-final-scale:' + coreFinalScale + ';' +
+      '--ripple-core-duration:' + coreDuration + 'ms;' +
+      '--ripple-core-fade-duration:' + coreFade + 'ms;' +
+      '--ripple-fade-duration:' + RIPPLE_FADE_DURATION + 'ms;' +
       'background:' + bg + ';transform:scale(1) translate3d(0,0,0);backface-visibility:hidden;box-shadow:' + boxShadow + ';';
     el.appendChild(ripple);
     let set = activeRipples.get(el);
