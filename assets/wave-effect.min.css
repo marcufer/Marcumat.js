@@ -1,142 +1,128 @@
 [wave] {
-  box-sizing: border-box;
-  display: inline-block;
-  position: relative;
-  overflow: hidden;
-  vertical-align: middle;
+box-sizing: border-box;
+display: inline-block;
+position: relative;
+overflow: hidden;
+vertical-align: middle;
 }
 
-/* -------------------------
-   Global tuning (Dark Material)
-------------------------- */
-:root {
-  --ripple-duration: 1800ms;
-  --ripple-fade-duration: 900ms;
-  
-  --ripple-easing: cubic-bezier(0.22, 0.61, 0.36, 1);
-  
-  /* Dark intensity */
-  --ripple-opacity: 0.42;
-  --ripple-highlight-opacity: 0.38;
-  
-  /* Shadow depth */
-  --ripple-shadow: 0 10px 28px rgba(0, 0, 0, 0.45);
-  --ripple-shadow-soft: 0 4px 16px rgba(0, 0, 0, 0.32);
+/* Simplified timings:
+
+Two timing variables remain:
+--ripple-duration: transform/expansion duration
+--ripple-fade-duration: opacity fade duration
+
+Blur removed; contain usage reduced to avoid layer/paint glitches.
+*/
+
+
+:root{
+--ripple-duration: 2500ms;
+--ripple-fade-duration: 800ms;
+
+/* gentle ease for expansion */
+--ripple-easing: cubic-bezier(0.12, 0.75, 0.24, 1);
+
+/* sheen tuning */
+--ripple-sheen-opacity: 0.82;
 }
 
-/* Respect reduced motion */
+/* Respect user's reduced motion preference */
 @media (prefers-reduced-motion: reduce) {
-  :root {
-    --ripple-duration: 240ms;
-    --ripple-fade-duration: 160ms;
-  }
+:root {
+--ripple-fade-duration: 120ms;
+--ripple-duration: 220ms;
+}
 }
 
-/* -------------------------
-   Core Ripple
-------------------------- */
 .ripple {
-  pointer-events: none;
-  position: absolute;
-  border-radius: 50%;
-  width: 20px;
-  height: 20px;
-  
-  /* Dark-only material surface */
-  background:
-    radial-gradient(circle at 30% 30%,
-      rgba(0, 0, 0, 0.55) 0%,
-      rgba(0, 0, 0, 0.35) 26%,
-      rgba(0, 0, 0, 0.22) 42%,
-      rgba(0, 0, 0, 0.12) 58%,
-      rgba(0, 0, 0, 0.06) 70%,
-      transparent 82%),
-    currentColor;
-  
-  opacity: var(--ripple-opacity);
-  transform: translate3d(0, 0, 0) scale(0.2);
-  transform-origin: 50% 50%;
-  
-  box-shadow:
-    var(--ripple-shadow-soft),
-    inset 0 -1px 2px rgba(0, 0, 0, 0.35);
-  
-  transition:
-    transform var(--ripple-duration) var(--ripple-easing),
-    opacity var(--ripple-fade-duration) cubic-bezier(0.4, 0, 0.2, 1);
-  
-  will-change: transform, opacity;
-  backface-visibility: hidden;
-  -webkit-tap-highlight-color: transparent;
+pointer-events: none;
+position: absolute;
+border-radius: 50%;
+width: 18px;
+height: 18px;
+background-color: currentColor;
+
+/* No filter/blur used */
+filter: none;
+
+/* Lighter shadow to reduce paint cost (static, NOT transitioned) */
+box-shadow: 0 4px 12px rgba(8, 12, 20, 0.04);
+
+opacity: 1;
+transform: scale(1) translate3d(0,0,0);
+transform-origin: 50% 50%;
+
+/* Only animate compositor-friendly properties */
+transition:
+transform var(--ripple-duration) var(--ripple-easing),
+opacity var(--ripple-fade-duration) cubic-bezier(0.4, 0, 0.2, 1);
+
+/* keep will-change stable via CSS so the compositor can prepare layers /
+will-change: transform, opacity;
+-webkit-backface-visibility: hidden;
+backface-visibility: hidden;
+-webkit-tap-highlight-color: transparent;
+/ push to its own layer aggressively */
+transform: translate3d(0,0,0) scale(1);
 }
 
-/* -------------------------
-   Dark sheen layer (no white)
-------------------------- */
+/* Subtle sheen */
 .ripple::before {
-  content: "";
-  position: absolute;
-  inset: 0;
-  border-radius: 50%;
-  pointer-events: none;
-  
-  background:
-    radial-gradient(circle at 35% 30%,
-      rgba(0, 0, 0, 0.65) 0%,
-      rgba(0, 0, 0, 0.45) 18%,
-      rgba(0, 0, 0, 0.30) 34%,
-      rgba(0, 0, 0, 0.18) 48%,
-      rgba(0, 0, 0, 0.10) 60%,
-      transparent 75%);
-  
-  opacity: var(--ripple-highlight-opacity);
-  transform: scale(1);
-  
-  transition:
-    transform var(--ripple-duration) var(--ripple-easing),
-    opacity var(--ripple-fade-duration) cubic-bezier(0.4, 0, 0.2, 1);
-  
-  will-change: transform, opacity;
+content: "";
+position: absolute;
+inset: 0;
+border-radius: 50%;
+pointer-events: none;
+background: radial-gradient(circle at 40% 35%, rgba(255,255,255,0.08) 0%, rgba(255,255,255,0.02) 28%, transparent 58%);
+opacity: var(--ripple-sheen-opacity, 0.82);
+transform: scale(1);
+transition:
+transform var(--ripple-duration) var(--ripple-easing),
+opacity var(--ripple-fade-duration) cubic-bezier(0.4, 0, 0.2, 1);
+will-change: transform, opacity;
 }
 
-/* -------------------------
-   Animation states
-------------------------- */
+.ripple.animating,
+.ripple.fading {
+/* keep will-change static (handled by base .ripple), avoid changing box-shadow here */
+}
+
+/* Animating uses transform-only updates (compositor) */
 .ripple.animating {
-  transform: translate3d(0, 0, 0) scale(var(--ripple-final-scale, 1));
-  opacity: var(--ripple-opacity);
-  
-  box-shadow:
-    var(--ripple-shadow),
-    inset 0 -2px 3px rgba(0, 0, 0, 0.45);
+transform: scale(var(--ripple-final-scale, 1)) translate3d(0,0,0);
+filter: none;
 }
-
 .ripple.animating::before {
-  transform: scale(calc(var(--ripple-final-scale, 1) * 1.08));
-  opacity: 1;
+transform: scale(calc(var(--ripple-final-scale, 1) * 1.04));
+opacity: 1;
 }
 
 .ripple.fading {
-  opacity: 0;
+opacity: 0;
+filter: none;
 }
-
 .ripple.fading::before {
-  opacity: 0;
+opacity: 0;
 }
 
-/* -------------------------
-   Performance tiers
-------------------------- */
+.ripple, .ripple::before { box-sizing: border-box; }
+
+/* Performance-specific tuning (shadow/pool only) */
 :root.wave-low-performance {
-  --ripple-highlight-opacity: 0.28;
-  --ripple-shadow: 0 6px 16px rgba(0, 0, 0, 0.35);
-  --ripple-shadow-soft: 0 3px 10px rgba(0, 0, 0, 0.25);
+--ripple-sheen-opacity: 0.6;
+--ripple-shadow: 0 3px 8px rgba(8,12,20,0.03);
 }
 
 :root.wave-medium-performance {
-  --ripple-highlight-opacity: 0.34;
+--ripple-sheen-opacity: 0.72;
 }
 
 :root.wave-high-performance {
-  --ripple-highlight-opacity: 0.42;
+--ripple-sheen-opacity: 0.86;
+}
+
+.wave-low-performance .ripple.animating,
+.wave-low-performance .ripple.fading {
+box-shadow: 0 3px 8px rgba(8,12,20,0.03);
 }
