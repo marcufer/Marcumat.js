@@ -17,11 +17,12 @@ Blur removed; contain usage reduced to avoid layer/paint glitches.
 
 
 :root{
---ripple-duration: 2500ms;
---ripple-fade-duration: 800ms;
+/* Shorter, consistent expansion so taps and holds behave the same */
+--ripple-duration: 1500ms;
+--ripple-fade-duration: 1000ms;
 
-/* gentle ease for expansion */
---ripple-easing: cubic-bezier(0.12, 0.75, 0.24, 1);
+/* gentle ease for expansion tuned for material feel */
+--ripple-easing: cubic-bezier(0.22, 0.9, 0.28, 1);
 
 /* sheen tuning */
 --ripple-sheen-opacity: 0.82;

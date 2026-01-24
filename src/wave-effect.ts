@@ -1,8 +1,9 @@
 ///////////////////////////////////////////////////////////////////////////////
-// wave-effect (TypeScript) — patched for more robust compositor-only animations
-// - Reduce repaint/reflow sources (no box-shadow transitions, stable will-change in CSS)
-// - Fix stale rapid-scroll flag exposure bug
-// - Avoid toggling will-change from JS (leave to CSS)
+// wave-effect (TypeScript) — patched for consistent, unified ripples
+// - Make tap and press behave the same: expansion completes / reaches full coverage
+//   regardless of quick release vs long-press (expansion duration reduced & synchronized)
+// - Delay fade until expansion completes (or remaining expansion time elapses)
+// - Preserve compositor-only transform animations and other performance choices
 //
 ///////////////////////////////////////////////////////////////////////////////
 
@@ -18,11 +19,12 @@ interface ElData {
 
 const RIPPLE_CLASS = 'ripple';
 const SURFACE_CLASS = 'ripple-surface';
-const BASE_DURATION = 2500;
-let RIPPLE_FADE_DURATION = 800;
+/* Shorter base duration so taps and holds expand similarly and finish expansion quickly */
+const BASE_DURATION = 360;
+let RIPPLE_FADE_DURATION = 1000;
 const RIPPLE_HALO_START_DIAMETER = 18;
-const COVERAGE_EXPAND_RATIO = 1.8;
-const MAX_RIPPLES_PER_ELEMENT = 2;
+const COVERAGE_EXPAND_RATIO = 0;
+const MAX_RIPPLES_PER_ELEMENT = 1;
 
 const elData: WeakMap<HTMLElement, ElData> = new WeakMap();
 const activeRipples: WeakMap<HTMLElement, Set<HTMLElement>> = new WeakMap();
@@ -343,16 +345,31 @@ function onPointerDown(this: HTMLElement, e: any) {
     if (!setNow) { setNow = new Set<HTMLElement>(); activeRipples.set(el, setNow); }
     setNow.add(ripple);
     let expansionEnded = false;
+    const startTime = now();
+
     function onTransformEnd(evt?: TransitionEvent) {
       if (evt && evt.propertyName !== 'transform') return;
       expansionEnded = true;
       ripple.removeEventListener('transitionend', onTransformEnd as EventListener);
     }
     ripple.addEventListener('transitionend', onTransformEnd as EventListener);
+
     function endRipple() {
       if (!ripple.parentNode) return;
-      fadeOutAndRemoveRipple(ripple, el);
-      try { if (setNow && setNow.delete) setNow.delete(ripple); } catch (e) { /* ignore */ }
+      // If the transform/expansion hasn't completed yet, wait the remaining expansion time
+      const elapsed = now() - startTime;
+      const remaining = Math.max(0, scaledDuration - elapsed);
+      if (!expansionEnded && remaining > 16) {
+        // wait remaining + small buffer, then fade
+        setTimeout(function () {
+          if (!ripple.parentNode) return;
+          fadeOutAndRemoveRipple(ripple, el);
+          try { if (setNow && setNow.delete) setNow.delete(ripple); } catch (e) { /* ignore */ }
+        }, remaining + 20);
+      } else {
+        fadeOutAndRemoveRipple(ripple, el);
+        try { if (setNow && setNow.delete) setNow.delete(ripple); } catch (e) { /* ignore */ }
+      }
       removeListeners();
     }
     function removeListeners() {
@@ -446,10 +463,11 @@ function onKeyDown(this: HTMLElement, e: KeyboardEvent) {
       ripple.classList.add('animating');
       animateRipple(ripple, haloFinalScale, scaledDuration);
     });
+    // Wait full expansion before fade so keyboard-triggered ripples match press behavior
     setTimeout(function () {
       fadeOutAndRemoveRipple(ripple, el);
       try { if (set && set.delete) set.delete(ripple); } catch (e) { /* ignore */ }
-    }, Math.max(120, scaledDuration - 120));
+    }, Math.max(120, scaledDuration + 20));
   });
 }
 
