@@ -1,9 +1,9 @@
 ///////////////////////////////////////////////////////////////////////////////
-// wave-effect (TypeScript) — patched for consistent, unified ripples
-// - Make tap and press behave the same: expansion completes / reaches full coverage
-//   regardless of quick release vs long-press (expansion duration reduced & synchronized)
-// - Delay fade until expansion completes (or remaining expansion time elapses)
-// - Preserve compositor-only transform animations and other performance choices
+// wave-effect (TypeScript) — patched for CSS-driven durations + fade-offset
+// - Read durations from CSS variables: --ripple-duration, --ripple-fade-duration
+// - New CSS variable --ripple-fade-offset (ms or %) controls when fade-out starts
+// - JS uses CSS values as authoritative; constants remain as fallbacks only
+// - Keeps compositor-friendly transform-only animations
 //
 ///////////////////////////////////////////////////////////////////////////////
 
@@ -19,9 +19,9 @@ interface ElData {
 
 const RIPPLE_CLASS = 'ripple';
 const SURFACE_CLASS = 'ripple-surface';
-/* Shorter base duration so taps and holds expand similarly and finish expansion quickly */
-const BASE_DURATION = 360;
-let RIPPLE_FADE_DURATION = 1000;
+/* Fallback durations (in ms) if CSS vars are not available */
+const FALLBACK_BASE_DURATION = 400;
+const FALLBACK_FADE_DURATION = 800;
 const RIPPLE_HALO_START_DIAMETER = 18;
 const COVERAGE_EXPAND_RATIO = 0;
 const MAX_RIPPLES_PER_ELEMENT = 1;
@@ -144,9 +144,61 @@ function releaseRippleNode(el: HTMLElement, node: HTMLElement) {
   if (d.pool.length < getMaxRipples()) d.pool.push(node);
 }
 
-function fadeOutAndRemoveRipple(ripple: HTMLElement | undefined | null, el: HTMLElement) {
+/* parse css time value like "1500ms", "1.5s", numeric (assume ms) */
+function parseTimeToMs(raw: string | null | undefined, fallback: number): number {
+  if (!raw) return fallback;
+  const s = raw.trim();
+  if (!s) return fallback;
+  // handle ms
+  const msMatch = /^(-?\d+(?:\.\d+)?)ms$/.exec(s);
+  if (msMatch) return Math.round(parseFloat(msMatch[1]));
+  const sMatch = /^(-?\d+(?:\.\d+)?)s$/.exec(s);
+  if (sMatch) return Math.round(parseFloat(sMatch[1]) * 1000);
+  // plain number -> assume ms
+  const numMatch = /^-?\d+(?:\.\d+)?$/.exec(s);
+  if (numMatch) return Math.round(parseFloat(s));
+  return fallback;
+}
+
+/* parse offset which can be ms or percent (e.g. "10%") */
+function parseOffset(raw: string | null | undefined, expansionDuration: number): number {
+  if (!raw) return 0;
+  const s = raw.trim();
+  if (!s) return 0;
+  const pct = /^(-?\d+(?:\.\d+)?)%$/.exec(s);
+  if (pct) {
+    const p = parseFloat(pct[1]);
+    return Math.round(expansionDuration * (p / 100));
+  }
+  // otherwise parse as time
+  return parseTimeToMs(s, 0);
+}
+
+/* Read effective timing variables for an element (CSS vars), fallback to root, fallback to constants */
+function readTimingFromCSS(el: HTMLElement): { expansionDuration: number; fadeDuration: number; fadeOffset: number } {
+  let cs: CSSStyleDeclaration | null = null;
+  try { cs = getComputedStyle(el); } catch (e) { cs = null; }
+  if (!cs && typeof document !== 'undefined') cs = getComputedStyle(document.documentElement);
+  const vd = cs ? cs.getPropertyValue('--ripple-duration') : '';
+  const vf = cs ? cs.getPropertyValue('--ripple-fade-duration') : '';
+  const vo = cs ? cs.getPropertyValue('--ripple-fade-offset') : '';
+  const expansionDuration = parseTimeToMs(vd, FALLBACK_BASE_DURATION);
+  const fadeDuration = parseTimeToMs(vf, FALLBACK_FADE_DURATION);
+  const fadeOffset = parseOffset(vo, expansionDuration);
+  return { expansionDuration, fadeDuration, fadeOffset };
+}
+
+function fadeOutAndRemoveRipple(ripple: HTMLElement | undefined | null, el: HTMLElement, fadeDurationOverride?: number) {
   if (!ripple) return;
-  const duration = RIPPLE_FADE_DURATION;
+  // get fade duration (either passed or from ripple/style or computed)
+  let duration = typeof fadeDurationOverride === 'number' ? fadeDurationOverride : undefined;
+  if (duration === undefined) {
+    try {
+      const cs = getComputedStyle(ripple);
+      const val = cs.getPropertyValue('--ripple-fade-duration');
+      duration = parseTimeToMs(val, FALLBACK_FADE_DURATION);
+    } catch (e) { duration = FALLBACK_FADE_DURATION; }
+  }
   ripple.classList.add('fading');
   ripple.style.setProperty('--ripple-fade-duration', duration + 'ms');
   // avoid setting will-change here; CSS already declares it
@@ -168,7 +220,16 @@ function fadeOutAndRemoveRipple(ripple: HTMLElement | undefined | null, el: HTML
 
 function clearRipples(el: HTMLElement) {
   const nodes = el.querySelectorAll('.' + RIPPLE_CLASS);
-  for (let i = 0; i < nodes.length; i++) fadeOutAndRemoveRipple(nodes[i] as HTMLElement, el);
+  for (let i = 0; i < nodes.length; i++) {
+    const node = nodes[i] as HTMLElement;
+    // pass fade duration read from node or computed style
+    let fd = FALLBACK_FADE_DURATION;
+    try {
+      const cs = getComputedStyle(node);
+      fd = parseTimeToMs(cs.getPropertyValue('--ripple-fade-duration'), FALLBACK_FADE_DURATION);
+    } catch (e) {}
+    fadeOutAndRemoveRipple(node, el, fd);
+  }
   activeRipples.set(el, new Set());
 }
 
@@ -275,12 +336,12 @@ function findWaveDelegateEl(originEl: EventTarget | null, event: any): boolean {
   return false;
 }
 
-function animateRipple(node: HTMLElement, scale: number, duration: number) {
+function animateRipple(node: HTMLElement, scale: number, expansionDuration: number) {
   // rely on CSS will-change (set in stylesheet) to promote to compositor; only write transform
   node.style.transform = 'translate3d(0,0,0) scale(' + scale + ')';
   try { (node.style as any).backfaceVisibility = 'hidden'; } catch (e) {}
   // avoid touching will-change here; removal not needed
-  const removeAfter = Math.max(120, duration + 60);
+  const removeAfter = Math.max(120, expansionDuration + 60);
   setTimeout(() => {
     // nothing to remove — keep will-change controlled by CSS
   }, removeAfter);
@@ -310,7 +371,12 @@ function onPointerDown(this: HTMLElement, e: any) {
     p = computePointerLocal(el, pointer);
   }
 
-  const scaledDuration = Math.max(120, Math.round(BASE_DURATION));
+  // Read timing from CSS (authoritative)
+  const timings = readTimingFromCSS(el);
+  const scaledDuration = Math.max(120, Math.round(timings.expansionDuration));
+  const fadeDuration = Math.max(32, Math.round(timings.fadeDuration)); // min for safety
+  const fadeOffset = Math.max(0, Math.round(timings.fadeOffset));
+
   const radius = maximalExpandedCoverageRadius(p.x, p.y, p.w, p.h);
   const haloFinalScale = (radius * 2) / RIPPLE_HALO_START_DIAMETER;
   const colorVal = getRippleColor(el);
@@ -322,7 +388,7 @@ function onPointerDown(this: HTMLElement, e: any) {
     if (set.size >= getMaxRipples()) {
       try {
         const it = set.values().next();
-        if (!it.done && it.value) fadeOutAndRemoveRipple(it.value, el);
+        if (!it.done && it.value) fadeOutAndRemoveRipple(it.value, el, fadeDuration);
       } catch (e) { /* ignore */ }
     }
 
@@ -333,10 +399,12 @@ function onPointerDown(this: HTMLElement, e: any) {
 
     const boxShadow = (PERF_LEVEL === 'low') ? '0 3px 8px rgba(8,12,20,0.03)' : '0 4px 12px rgba(8, 12, 20, 0.04)';
 
+    // Set CSS vars on the ripple so transitions use them
     ripple.style.cssText =
       'display:block;position:absolute;border-radius:50%;pointer-events:none;' +
       'width:' + size + ';height:' + size + ';left:' + left + ';top:' + top + ';' +
       '--ripple-duration:' + scaledDuration + 'ms;' +
+      '--ripple-fade-duration:' + fadeDuration + 'ms;' +
       '--ripple-final-scale:' + haloFinalScale + ';' +
       'background:' + bg + ';transform:scale(1) translate3d(0,0,0);backface-visibility:hidden;box-shadow:' + boxShadow + ';';
 
@@ -356,18 +424,18 @@ function onPointerDown(this: HTMLElement, e: any) {
 
     function endRipple() {
       if (!ripple.parentNode) return;
-      // If the transform/expansion hasn't completed yet, wait the remaining expansion time
+      // If the transform/expansion hasn't reached the fade-start point yet, wait until then.
       const elapsed = now() - startTime;
-      const remaining = Math.max(0, scaledDuration - elapsed);
-      if (!expansionEnded && remaining > 16) {
-        // wait remaining + small buffer, then fade
+      const desiredStart = Math.max(0, scaledDuration - fadeOffset); // ms into animation to start fade
+      if (elapsed < desiredStart) {
+        const waitMs = Math.max(0, desiredStart - elapsed);
         setTimeout(function () {
           if (!ripple.parentNode) return;
-          fadeOutAndRemoveRipple(ripple, el);
+          fadeOutAndRemoveRipple(ripple, el, fadeDuration);
           try { if (setNow && setNow.delete) setNow.delete(ripple); } catch (e) { /* ignore */ }
-        }, remaining + 20);
+        }, waitMs + 12);
       } else {
-        fadeOutAndRemoveRipple(ripple, el);
+        fadeOutAndRemoveRipple(ripple, el, fadeDuration);
         try { if (setNow && setNow.delete) setNow.delete(ripple); } catch (e) { /* ignore */ }
       }
       removeListeners();
@@ -439,7 +507,13 @@ function onKeyDown(this: HTMLElement, e: KeyboardEvent) {
     const x = rect.width / 2, y = rect.height / 2;
     const radius = maximalExpandedCoverageRadius(x, y, rect.width, rect.height);
     const haloFinalScale = (radius * 2) / RIPPLE_HALO_START_DIAMETER;
-    const scaledDuration = Math.max(120, Math.round(BASE_DURATION));
+
+    // Read timings from CSS
+    const timings = readTimingFromCSS(el);
+    const scaledDuration = Math.max(120, Math.round(timings.expansionDuration));
+    const fadeDuration = Math.max(32, Math.round(timings.fadeDuration));
+    const fadeOffset = Math.max(0, Math.round(timings.fadeOffset));
+
     const colorVal = getRippleColor(el);
     const bg = computeGradient(colorVal);
     const ripple = getRippleNode(el);
@@ -453,6 +527,7 @@ function onKeyDown(this: HTMLElement, e: KeyboardEvent) {
       'display:block;position:absolute;border-radius:50%;pointer-events:none;' +
       'width:' + size + ';height:' + size + ';left:' + left + ';top:' + top + ';' +
       '--ripple-duration:' + scaledDuration + 'ms;' +
+      '--ripple-fade-duration:' + fadeDuration + 'ms;' +
       '--ripple-final-scale:' + haloFinalScale + ';' +
       'background:' + bg + ';transform:scale(1) translate3d(0,0,0);backface-visibility:hidden;box-shadow:' + boxShadow + ';';
     el.appendChild(ripple);
@@ -463,11 +538,12 @@ function onKeyDown(this: HTMLElement, e: KeyboardEvent) {
       ripple.classList.add('animating');
       animateRipple(ripple, haloFinalScale, scaledDuration);
     });
-    // Wait full expansion before fade so keyboard-triggered ripples match press behavior
+    // Wait until desired fade-start point so keyboard-triggered ripples match press behavior
+    const desiredStart = Math.max(0, scaledDuration - fadeOffset);
     setTimeout(function () {
-      fadeOutAndRemoveRipple(ripple, el);
+      fadeOutAndRemoveRipple(ripple, el, fadeDuration);
       try { if (set && set.delete) set.delete(ripple); } catch (e) { /* ignore */ }
-    }, Math.max(120, scaledDuration + 20));
+    }, Math.max(120, desiredStart + 20));
   });
 }
 
@@ -629,9 +705,12 @@ if (typeof window !== 'undefined' && typeof document !== 'undefined') {
 }
 
 const config = {
-  BASE_DURATION,
-  get RIPPLE_FADE_DURATION() { return RIPPLE_FADE_DURATION; },
-  setFadeDuration(ms: number) { if (typeof ms === 'number' && ms > 50 && ms < 5000) RIPPLE_FADE_DURATION = ms | 0; },
+  /* Keep fallbacks accessible but prefer CSS vars */
+  FALLBACK_BASE_DURATION,
+  FALLBACK_FADE_DURATION,
+  /* programmatic overrides still possible if needed */
+  getCSSVarsForElement(el?: HTMLElement) { return el ? readTimingFromCSS(el) : { expansionDuration: FALLBACK_BASE_DURATION, fadeDuration: FALLBACK_FADE_DURATION, fadeOffset: 0 }; },
+  setFadeDuration(ms: number) { /* kept for compatibility but CSS is preferred */ },
   setRippleDuration(ms: number) { /* placeholder */ }
 };
 
