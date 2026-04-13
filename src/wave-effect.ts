@@ -1,9 +1,9 @@
 ///////////////////////////////////////////////////////////////////////////////
-// wave-effect (TypeScript) — patched for CSS-driven durations + fade-offset
-// - Read durations from CSS variables: --ripple-duration, --ripple-fade-duration
-// - New CSS variable --ripple-fade-offset (ms or %) controls when fade-out starts
-// - JS uses CSS values as authoritative; constants remain as fallbacks only
-// - Keeps compositor-friendly transform-only animations
+// wave-effect (TypeScript) — optimized gradient & perf tuning (v2)
+// - Center is now noticeably stronger (closer to peak but still below it)
+// - Fewer stops where possible; low-perf path uses an even simpler gradient
+// - Increased gradient cache TTL and reuse to reduce churn
+// - Maintains transform-only animations, pooling, and limited ripple count
 //
 ///////////////////////////////////////////////////////////////////////////////
 
@@ -28,7 +28,8 @@ const MAX_RIPPLES_PER_ELEMENT = 1;
 
 const elData: WeakMap<HTMLElement, ElData> = new WeakMap();
 const activeRipples: WeakMap<HTMLElement, Set<HTMLElement>> = new WeakMap();
-const GRADIENT_TTL = 20000;
+/* Larger TTL reduces recompute frequency (less string churn) */
+const GRADIENT_TTL = 60000;
 const DEFAULT_GRADIENT = 'radial-gradient(circle, rgba(16, 20, 28, 0.2) 0%, transparent 80%)';
 const reWaveColor = /(?:^|\s)c\s*[=:]?\s*([#a-zA-Z0-9(),.\s]+)/i;
 const reFuncColor = /^(rgba?|hsla?)\(([^)]+)\)$/i;
@@ -89,7 +90,7 @@ try {
 
 function getMaxRipples() {
   if (PERF_LEVEL === 'low') return 1;
-  if (PERF_LEVEL === 'medium') return 2;
+  if (PERF_LEVEL === 'medium') return 1; // keep low to be conservative on mid devices
   return MAX_RIPPLES_PER_ELEMENT;
 }
 
@@ -99,27 +100,102 @@ function getElData(el: HTMLElement): ElData {
   return d;
 }
 
+/* computeGradient (v2)
+   - Center alpha closer to peak (but still below it)
+   - Tuned stop positions for smooth visual
+   - Low-perf path uses fewer stops to reduce paint cost
+   - Caches results in module map to avoid repeated string construction
+*/
 function computeGradient(color?: Maybe<string>): string {
   if (!color) return DEFAULT_GRADIENT;
   const d = now();
   if (!(computeGradient as any)._map) (computeGradient as any)._map = new Map<string, {v: string; t: number;}>();
   const gm: Map<string, {v: string; t: number;}> = (computeGradient as any)._map;
   const entry = gm.get(color);
-  const localTTL = PERF_LEVEL === 'low' ? GRADIENT_TTL * 4 : GRADIENT_TTL;
+  const localTTL = (PERF_LEVEL === 'low') ? GRADIENT_TTL * 4 : GRADIENT_TTL;
   if (entry && (d - entry.t) < localTTL) return entry.v;
-  const cleaned = (color || '').replace(/\s+/g, '');
-  const m = reFuncColor.exec(cleaned);
+
+  const cleaned = (color || '').trim();
+  const m = reFuncColor.exec(cleaned.replace(/\s+/g, ''));
+
+  function hexToRgb(hex: string): [number, number, number] | null {
+    if (!hex) return null;
+    let h = hex.replace('#','');
+    if (h.length === 3) h = h.split('').map(c => c + c).join('');
+    if (h.length !== 6) return null;
+    const int = parseInt(h, 16);
+    return [ (int >> 16) & 255, (int >> 8) & 255, int & 255 ];
+  }
+
   let out: string;
   if (m) {
+    // functional color: rgba()/hsla()
     const parts = m[2].split(',');
     const alpha = (parts[3] !== undefined) ? parseFloat(parts[3]) : 1;
-    const rippleAlpha = Math.min(1, Math.max(alpha, 0.15));
+    // Slightly stronger baseline so center is visible but peak is still stronger
+    const rippleAlpha = Math.min(1, Math.max(alpha, 0.22));
     const prefix = m[1].startsWith('hsl') ? 'hsla' : 'rgba';
     const core = parts.slice(0, 3).join(',');
-    out = 'radial-gradient(circle, ' + prefix + '(' + core + ',' + rippleAlpha + ') 10%, transparent 80%)';
+
+    if (PERF_LEVEL === 'low') {
+      // very compact gradient for low devices: center + peak + transparent
+      out =
+        'radial-gradient(circle at center, ' +
+        prefix + '(' + core + ',' + (rippleAlpha * 0.6).toFixed(3) + ') 0%, ' +
+        prefix + '(' + core + ',' + rippleAlpha.toFixed(3) + ') 36%, ' +
+        'transparent 86%)';
+    } else {
+      // full (but still moderate) gradient for mid/high perf: 5 stops
+      const centerAlpha = (rippleAlpha * 0.70).toFixed(3); // center closer to peak
+      const innerAlpha = (rippleAlpha * 0.92).toFixed(3);
+      const peakAlpha = rippleAlpha.toFixed(3);
+      const outerAlpha = (Math.max(rippleAlpha * 0.28, 0.02)).toFixed(3);
+      out =
+        'radial-gradient(circle at center, ' +
+        prefix + '(' + core + ',' + centerAlpha + ') 0%, ' +        // center (noticeable)
+        prefix + '(' + core + ',' + innerAlpha + ') 12%, ' +       // inner
+        prefix + '(' + core + ',' + peakAlpha + ') 30%, ' +        // peak
+        prefix + '(' + core + ',' + outerAlpha + ') 56%, ' +       // outer fade
+        'transparent 86%)';
+    }
   } else {
-    out = 'radial-gradient(circle, ' + color + '26 10%, transparent 80%)';
+    const hexMatch = /^#([0-9a-fA-F]{3}|[0-9a-fA-F]{6})$/.exec(cleaned);
+    if (hexMatch) {
+      const rgb = hexToRgb(hexMatch[0]);
+      if (rgb) {
+        const [r, g, b] = rgb;
+        const rippleAlpha = (PERF_LEVEL === 'low') ? 0.18 : 0.22;
+        if (PERF_LEVEL === 'low') {
+          out =
+            'radial-gradient(circle at center, ' +
+            'rgba(' + r + ',' + g + ',' + b + ',' + (rippleAlpha * 0.6).toFixed(3) + ') 0%, ' +
+            'rgba(' + r + ',' + g + ',' + b + ',' + rippleAlpha.toFixed(3) + ') 36%, ' +
+            'transparent 86%)';
+        } else {
+          out =
+            'radial-gradient(circle at center, ' +
+            'rgba(' + r + ',' + g + ',' + b + ',' + (rippleAlpha * 0.70).toFixed(3) + ') 0%, ' +
+            'rgba(' + r + ',' + g + ',' + b + ',' + (rippleAlpha * 0.92).toFixed(3) + ') 12%, ' +
+            'rgba(' + r + ',' + g + ',' + b + ',' + rippleAlpha.toFixed(3) + ') 30%, ' +
+            'rgba(' + r + ',' + g + ',' + b + ',' + (Math.max(rippleAlpha * 0.28, 0.02)).toFixed(3) + ') 56%, ' +
+            'transparent 86%)';
+        }
+      } else {
+        out = DEFAULT_GRADIENT;
+      }
+    } else {
+      // Named/complex colors: short fallback
+      if (PERF_LEVEL === 'low') {
+        out = 'radial-gradient(circle at center, rgba(255,255,255,0.06) 0%, rgba(0,0,0,0.18) 36%, transparent 86%)';
+      } else {
+        out =
+          'radial-gradient(circle at center, ' +
+          cleaned + '88 0%, ' +
+          cleaned + '44 28%, transparent 72%)';
+      }
+    }
   }
+
   gm.set(color, { v: out, t: d });
   return out;
 }
@@ -130,14 +206,12 @@ function getRippleNode(el: HTMLElement): HTMLElement {
   let node = pool.pop();
   if (!node) node = _tpl.cloneNode(false) as HTMLElement;
   node.classList.remove('animating', 'fading');
-  // do not fully clear cssText (avoid unnecessary style churn); we'll overwrite what's needed below
   return node;
 }
 
 function releaseRippleNode(el: HTMLElement, node: HTMLElement) {
   node.classList.remove('animating', 'fading');
   try { node.style.opacity = '0'; } catch (e) { /* ignore */ }
-  // avoid toggling will-change from JS — CSS handles it
   try { if (node.parentNode === el) el.removeChild(node); } catch (e) { /* ignore */ }
   const d = getElData(el);
   if (!d.pool) d.pool = [];
@@ -149,12 +223,10 @@ function parseTimeToMs(raw: string | null | undefined, fallback: number): number
   if (!raw) return fallback;
   const s = raw.trim();
   if (!s) return fallback;
-  // handle ms
   const msMatch = /^(-?\d+(?:\.\d+)?)ms$/.exec(s);
   if (msMatch) return Math.round(parseFloat(msMatch[1]));
   const sMatch = /^(-?\d+(?:\.\d+)?)s$/.exec(s);
   if (sMatch) return Math.round(parseFloat(sMatch[1]) * 1000);
-  // plain number -> assume ms
   const numMatch = /^-?\d+(?:\.\d+)?$/.exec(s);
   if (numMatch) return Math.round(parseFloat(s));
   return fallback;
@@ -170,7 +242,6 @@ function parseOffset(raw: string | null | undefined, expansionDuration: number):
     const p = parseFloat(pct[1]);
     return Math.round(expansionDuration * (p / 100));
   }
-  // otherwise parse as time
   return parseTimeToMs(s, 0);
 }
 
@@ -190,7 +261,6 @@ function readTimingFromCSS(el: HTMLElement): { expansionDuration: number; fadeDu
 
 function fadeOutAndRemoveRipple(ripple: HTMLElement | undefined | null, el: HTMLElement, fadeDurationOverride?: number) {
   if (!ripple) return;
-  // get fade duration (either passed or from ripple/style or computed)
   let duration = typeof fadeDurationOverride === 'number' ? fadeDurationOverride : undefined;
   if (duration === undefined) {
     try {
@@ -201,14 +271,12 @@ function fadeOutAndRemoveRipple(ripple: HTMLElement | undefined | null, el: HTML
   }
   ripple.classList.add('fading');
   ripple.style.setProperty('--ripple-fade-duration', duration + 'ms');
-  // avoid setting will-change here; CSS already declares it
   let removed = false;
   function onEnd(e?: TransitionEvent) {
     if (removed) return;
     if (!e || e.propertyName === 'opacity') {
       removed = true;
       ripple.removeEventListener('transitionend', onEnd as EventListener);
-      // avoid toggling will-change here
       const set = activeRipples.get(el);
       if (set && set.delete) set.delete(ripple);
       releaseRippleNode(el, ripple);
@@ -222,7 +290,6 @@ function clearRipples(el: HTMLElement) {
   const nodes = el.querySelectorAll('.' + RIPPLE_CLASS);
   for (let i = 0; i < nodes.length; i++) {
     const node = nodes[i] as HTMLElement;
-    // pass fade duration read from node or computed style
     let fd = FALLBACK_FADE_DURATION;
     try {
       const cs = getComputedStyle(node);
@@ -337,13 +404,11 @@ function findWaveDelegateEl(originEl: EventTarget | null, event: any): boolean {
 }
 
 function animateRipple(node: HTMLElement, scale: number, expansionDuration: number) {
-  // rely on CSS will-change (set in stylesheet) to promote to compositor; only write transform
   node.style.transform = 'translate3d(0,0,0) scale(' + scale + ')';
   try { (node.style as any).backfaceVisibility = 'hidden'; } catch (e) {}
-  // avoid touching will-change here; removal not needed
   const removeAfter = Math.max(120, expansionDuration + 60);
   setTimeout(() => {
-    // nothing to remove — keep will-change controlled by CSS
+    // nothing else
   }, removeAfter);
 }
 
@@ -351,14 +416,7 @@ function onPointerDown(this: HTMLElement, e: any) {
   if (e.button && e.button !== 0) return;
   const el = this;
   if (!el) return;
-  // read dynamic flag directly (do NOT rely on a stale property copy)
   if ((typeof (globalThis as any) !== 'undefined' && (globalThis as any).__wave_ignore_events__) ) return;
-  if ((<any>window).isRapidScrollFlag) {
-    // older integrations might expose, but prefer module-level var; fallback below
-  }
-  if ((<any>window).navigator && false) {} // noop to avoid TS warning
-
-  // Use the module-level isRapidScrollFlag (declared below in installTouchHandlers)
   if ((onPointerDown as any)._use_isRapidScrollFlag_internal && (onPointerDown as any)._use_isRapidScrollFlag_internal()) {
     return;
   }
@@ -371,10 +429,9 @@ function onPointerDown(this: HTMLElement, e: any) {
     p = computePointerLocal(el, pointer);
   }
 
-  // Read timing from CSS (authoritative)
   const timings = readTimingFromCSS(el);
   const scaledDuration = Math.max(120, Math.round(timings.expansionDuration));
-  const fadeDuration = Math.max(32, Math.round(timings.fadeDuration)); // min for safety
+  const fadeDuration = Math.max(32, Math.round(timings.fadeDuration));
   const fadeOffset = Math.max(0, Math.round(timings.fadeOffset));
 
   const radius = maximalExpandedCoverageRadius(p.x, p.y, p.w, p.h);
@@ -397,9 +454,9 @@ function onPointerDown(this: HTMLElement, e: any) {
     const left = (p.x - RIPPLE_HALO_START_DIAMETER / 2) + 'px';
     const top = (p.y - RIPPLE_HALO_START_DIAMETER / 2) + 'px';
 
-    const boxShadow = (PERF_LEVEL === 'low') ? '0 3px 8px rgba(8,12,20,0.03)' : '0 4px 12px rgba(8, 12, 20, 0.04)';
+    const boxShadow = (PERF_LEVEL === 'low') ? 'none' : 'var(--ripple-shadow, 0 4px 12px rgba(8, 12, 20, 0.04))';
 
-    // Set CSS vars on the ripple so transitions use them
+    // Set CSS vars on the ripple so transitions use them; keep inline style minimal and stable
     ripple.style.cssText =
       'display:block;position:absolute;border-radius:50%;pointer-events:none;' +
       'width:' + size + ';height:' + size + ';left:' + left + ';top:' + top + ';' +
@@ -424,9 +481,8 @@ function onPointerDown(this: HTMLElement, e: any) {
 
     function endRipple() {
       if (!ripple.parentNode) return;
-      // If the transform/expansion hasn't reached the fade-start point yet, wait until then.
       const elapsed = now() - startTime;
-      const desiredStart = Math.max(0, scaledDuration - fadeOffset); // ms into animation to start fade
+      const desiredStart = Math.max(0, scaledDuration - fadeOffset);
       if (elapsed < desiredStart) {
         const waitMs = Math.max(0, desiredStart - elapsed);
         setTimeout(function () {
@@ -508,7 +564,6 @@ function onKeyDown(this: HTMLElement, e: KeyboardEvent) {
     const radius = maximalExpandedCoverageRadius(x, y, rect.width, rect.height);
     const haloFinalScale = (radius * 2) / RIPPLE_HALO_START_DIAMETER;
 
-    // Read timings from CSS
     const timings = readTimingFromCSS(el);
     const scaledDuration = Math.max(120, Math.round(timings.expansionDuration));
     const fadeDuration = Math.max(32, Math.round(timings.fadeDuration));
@@ -521,7 +576,7 @@ function onKeyDown(this: HTMLElement, e: KeyboardEvent) {
     const left = (rect.width / 2 - RIPPLE_HALO_START_DIAMETER / 2) + 'px';
     const top = (rect.height / 2 - RIPPLE_HALO_START_DIAMETER / 2) + 'px';
 
-    const boxShadow = (PERF_LEVEL === 'low') ? '0 3px 8px rgba(8,12,20,0.03)' : '0 4px 12px rgba(8, 12, 20, 0.04)';
+    const boxShadow = (PERF_LEVEL === 'low') ? 'none' : 'var(--ripple-shadow, 0 4px 12px rgba(8, 12, 20, 0.04))';
 
     ripple.style.cssText =
       'display:block;position:absolute;border-radius:50%;pointer-events:none;' +
@@ -538,7 +593,6 @@ function onKeyDown(this: HTMLElement, e: KeyboardEvent) {
       ripple.classList.add('animating');
       animateRipple(ripple, haloFinalScale, scaledDuration);
     });
-    // Wait until desired fade-start point so keyboard-triggered ripples match press behavior
     const desiredStart = Math.max(0, scaledDuration - fadeOffset);
     setTimeout(function () {
       fadeOutAndRemoveRipple(ripple, el, fadeDuration);
@@ -588,7 +642,6 @@ let isRapidScrollFlag = false;
   document.addEventListener('touchcancel', onTouchEnd, { passive: true });
   window.addEventListener('scroll', onScroll, { passive: true });
 
-  // provide a small helper for onPointerDown so it can read the live flag (no stale copy)
   (onPointerDown as any)._use_isRapidScrollFlag_internal = function () { return isRapidScrollFlag; };
 })();
 

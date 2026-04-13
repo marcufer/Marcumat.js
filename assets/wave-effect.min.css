@@ -1,139 +1,122 @@
 [wave] {
-box-sizing: border-box;
-display: inline-block;
-position: relative;
-overflow: hidden;
-vertical-align: middle;
+  box-sizing: border-box;
+  display: inline-block;
+  position: relative;
+  overflow: hidden;
+  vertical-align: middle;
 }
 
-/* Simplified timings:
-
-Two timing variables remain:
---ripple-duration: transform/expansion duration
---ripple-fade-duration: opacity fade duration
-
-New:
---ripple-fade-offset: how long BEFORE expansion end to start fading.
-  - Accepts ms (e.g. 120ms) or percentage (e.g. 10%) which is relative to expansion duration.
-  - Positive value means start fading that many ms (or percent) BEFORE expansion completes.
-  - Default 0ms = start fade when expansion finishes.
-
-Blur removed; contain usage reduced to avoid layer/paint glitches.
-*/
-
-
+/* Timings and tuning variables */
 :root{
-/* Shorter, consistent expansion so taps and holds behave the same */
---ripple-duration: 400ms;
---ripple-fade-duration: 800ms;
+  --ripple-duration: 400ms;
+  --ripple-fade-duration: 800ms;
+  --ripple-fade-offset: 1200ms;
+  --ripple-easing: cubic-bezier(0.22, 0.9, 0.28, 1);
 
-/* New: start fading N ms before expansion ends (or percentage of expansion duration) */
---ripple-fade-offset: 1200ms; /* Accepts "100ms" or "10%" */
+  /* Sheen on top of gradient */
+  --ripple-sheen-opacity: 0.82;
 
-/* gentle ease for expansion tuned for material feel */
---ripple-easing: cubic-bezier(0.22, 0.9, 0.28, 1);
-
-/* sheen tuning */
---ripple-sheen-opacity: 0.82;
+  /* Shadow is kept as a var so performance classes can change it */
+  --ripple-shadow: 0 4px 12px rgba(8, 12, 20, 0.04);
 }
 
-/* Respect user's reduced motion preference */
+/* Respect reduced motion */
 @media (prefers-reduced-motion: reduce) {
-:root {
---ripple-fade-duration: 120ms;
---ripple-duration: 220ms;
---ripple-fade-offset: 0ms;
-}
+  :root {
+    --ripple-fade-duration: 120ms;
+    --ripple-duration: 220ms;
+    --ripple-fade-offset: 0ms;
+  }
 }
 
+/* Base ripple element — small, transform-only animated, compositor-friendly */
 .ripple {
-pointer-events: none;
-position: absolute;
-border-radius: 50%;
-width: 18px;
-height: 18px;
-background-color: currentColor;
+  pointer-events: none;
+  position: absolute;
+  border-radius: 50%;
+  width: 18px;
+  height: 18px;
 
-/* No filter/blur used */
-filter: none;
+  /* background set by JS (radial-gradient) */
+  background-color: currentColor;
 
-/* Lighter shadow to reduce paint cost (static, NOT transitioned) */
-box-shadow: 0 4px 12px rgba(8, 12, 20, 0.04);
+  filter: none;
+  box-shadow: var(--ripple-shadow);
 
-opacity: 1;
-transform: scale(1) translate3d(0,0,0);
-transform-origin: 50% 50%;
+  opacity: 1;
+  transform: scale(1) translate3d(0,0,0);
+  transform-origin: 50% 50%;
 
-/* Only animate compositor-friendly properties */
-transition:
-transform var(--ripple-duration) var(--ripple-easing),
-opacity var(--ripple-fade-duration) cubic-bezier(0.4, 0, 0.2, 1);
+  transition:
+    transform var(--ripple-duration) var(--ripple-easing),
+    opacity var(--ripple-fade-duration) cubic-bezier(0.4, 0, 0.2, 1);
 
-/* keep will-change stable via CSS so the compositor can prepare layers /
-will-change: transform, opacity;
--webkit-backface-visibility: hidden;
-backface-visibility: hidden;
--webkit-tap-highlight-color: transparent;
-/ push to its own layer aggressively */
-transform: translate3d(0,0,0) scale(1);
+  /* promote to compositor and limit paint scope */
+  will-change: transform, opacity;
+  -webkit-backface-visibility: hidden;
+  backface-visibility: hidden;
+  -webkit-tap-highlight-color: transparent;
+  transform: translate3d(0,0,0) scale(1);
+
+  /* contain paint to this element when supported to reduce repaint area */
+  contain: paint;
+  isolation: isolate;
 }
 
-/* Subtle sheen */
+/* Subtle sheen layer (kept minimal — inexpensive) */
 .ripple::before {
-content: "";
-position: absolute;
-inset: 0;
-border-radius: 50%;
-pointer-events: none;
-background: radial-gradient(circle at 40% 35%, rgba(255,255,255,0.08) 0%, rgba(255,255,255,0.02) 28%, transparent 58%);
-opacity: var(--ripple-sheen-opacity, 0.82);
-transform: scale(1);
-transition:
-transform var(--ripple-duration) var(--ripple-easing),
-opacity var(--ripple-fade-duration) cubic-bezier(0.4, 0, 0.2, 1);
-will-change: transform, opacity;
+  content: "";
+  position: absolute;
+  inset: 0;
+  border-radius: 50%;
+  pointer-events: none;
+  /* simplified sheen gradient: few stops, low alpha to reduce paint cost */
+  background: radial-gradient(circle at 40% 35%,
+    rgba(255,255,255,0.06) 0%,
+    rgba(255,255,255,0.02) 28%,
+    transparent 56%);
+  opacity: var(--ripple-sheen-opacity, 0.82);
+  transform: scale(1);
+  transition:
+    transform var(--ripple-duration) var(--ripple-easing),
+    opacity var(--ripple-fade-duration) cubic-bezier(0.4, 0, 0.2, 1);
+  will-change: transform, opacity;
 }
 
-.ripple.animating,
-.ripple.fading {
-/* keep will-change static (handled by base .ripple), avoid changing box-shadow here */
-}
+/* Animation state classes */
+.ripple.animating { transform: scale(var(--ripple-final-scale, 1)) translate3d(0,0,0); filter: none; }
+.ripple.animating::before { transform: scale(calc(var(--ripple-final-scale, 1) * 1.04)); opacity: 1; }
 
-/* Animating uses transform-only updates (compositor) */
-.ripple.animating {
-transform: scale(var(--ripple-final-scale, 1)) translate3d(0,0,0);
-filter: none;
-}
-.ripple.animating::before {
-transform: scale(calc(var(--ripple-final-scale, 1) * 1.04));
-opacity: 1;
-}
-
-.ripple.fading {
-opacity: 0;
-filter: none;
-}
-.ripple.fading::before {
-opacity: 0;
-}
+.ripple.fading { opacity: 0; filter: none; }
+.ripple.fading::before { opacity: 0; }
 
 .ripple, .ripple::before { box-sizing: border-box; }
 
-/* Performance-specific tuning (shadow/pool only) */
+/* Performance tuning — reduce visuals on lower end devices */
 :root.wave-low-performance {
---ripple-sheen-opacity: 0.6;
---ripple-shadow: 0 3px 8px rgba(8,12,20,0.03);
+  --ripple-sheen-opacity: 0.6;
+  --ripple-shadow: none; /* avoid shadow paint */
+  --ripple-duration: 340ms;
+  --ripple-fade-duration: 420ms;
 }
-
 :root.wave-medium-performance {
---ripple-sheen-opacity: 0.72;
+  --ripple-sheen-opacity: 0.72;
+  --ripple-shadow: 0 3px 8px rgba(8,12,20,0.03);
+  --ripple-duration: 380ms;
 }
-
 :root.wave-high-performance {
---ripple-sheen-opacity: 0.86;
+  --ripple-sheen-opacity: 0.86;
+  --ripple-shadow: 0 4px 12px rgba(8,12,20,0.04);
 }
 
+/* Reduce paint cost: avoid shadow for low performance elements specifically */
 .wave-low-performance .ripple.animating,
 .wave-low-performance .ripple.fading {
-box-shadow: 0 3px 8px rgba(8,12,20,0.03);
+  box-shadow: none;
 }
+
+/* Notes:
+ - JS still sets inline `background` to a cached radial-gradient string.
+ - Gradients are simplified (few stops) and cached to minimize per-frame paint churn.
+ - Keep ripple DOM pool small (JS pooling) and use transform-only updates.
+*/
